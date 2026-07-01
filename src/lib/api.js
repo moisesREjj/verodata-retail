@@ -1,21 +1,7 @@
 import axios from 'axios'
 
-const API = axios.create({
-  baseURL: 'http://localhost:8081/api',
-  timeout: 3000,
-})
-
-API.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
 // ────────────────────────────────────────────────────────────
-//  Mock fallback para cuando el backend no está disponible
-//  (funciona en Netlify o cualquier entorno sin el server)
+//  Mock data
 // ────────────────────────────────────────────────────────────
 
 const MOCK_USERS = [
@@ -40,9 +26,12 @@ function stripPassword({ password, ...rest }) {
   return rest
 }
 
-function mockHandler(config) {
-  const { url, method, data, params } = config
-  const body = data ? JSON.parse(data) : {}
+// ────────────────────────────────────────────────────────────
+//  Mock handler — responde como si fuera un backend real
+// ────────────────────────────────────────────────────────────
+
+function mockHandler({ url, method, data }) {
+  const body = typeof data === 'string' ? JSON.parse(data) : (data || {})
 
   // POST /auth/login
   if (url === '/auth/login' && method === 'post') {
@@ -89,30 +78,111 @@ function mockHandler(config) {
   return null
 }
 
-API.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // 401 → logout
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      window.location.href = '/login'
+// ────────────────────────────────────────────────────────────
+//  ¿Estamos en Netlify / producción (sin backend real)?
+// ────────────────────────────────────────────────────────────
+
+const isNetlify = typeof window !== 'undefined' &&
+  window.location.hostname !== 'localhost' &&
+  window.location.hostname !== '127.0.0.1'
+
+// ────────────────────────────────────────────────────────────
+//  Cliente API: usa mock directo en Netlify, Axios en local
+// ────────────────────────────────────────────────────────────
+
+function createApiClient() {
+  if (isNetlify) {
+    // ── Modo Netlify: mock 100% frontend, sin llamadas HTTP ──
+    return {
+      async post(url, data) {
+        const result = mockHandler({ url, method: 'post', data })
+        if (!result) throw new Error(`Mock no implementado: POST ${url}`)
+        if (result.status >= 400) {
+          const err = new Error(result.data?.mensaje || 'Error')
+          err.response = { status: result.status, data: result.data }
+          throw err
+        }
+        return { data: result.data }
+      },
+
+      async get(url) {
+        const result = mockHandler({ url, method: 'get' })
+        if (!result) throw new Error(`Mock no implementado: GET ${url}`)
+        if (result.status >= 400) {
+          const err = new Error(result.data?.mensaje || 'Error')
+          err.response = { status: result.status, data: result.data }
+          throw err
+        }
+        return { data: result.data }
+      },
+
+      async put(url, data) {
+        const result = mockHandler({ url, method: 'put', data })
+        if (!result) throw new Error(`Mock no implementado: PUT ${url}`)
+        if (result.status >= 400) {
+          const err = new Error(result.data?.mensaje || 'Error')
+          err.response = { status: result.status, data: result.data }
+          throw err
+        }
+        return { data: result.data }
+      },
+
+      async delete(url) {
+        const result = mockHandler({ url, method: 'delete' })
+        if (!result) throw new Error(`Mock no implementado: DELETE ${url}`)
+        if (result.status >= 400) {
+          const err = new Error(result.data?.mensaje || 'Error')
+          err.response = { status: result.status, data: result.data }
+          throw err
+        }
+        return { data: result.data }
+      },
+    }
+  }
+
+  // ── Modo local: Axios real contra localhost:8081 ──
+  const client = axios.create({
+    baseURL: 'http://localhost:8081/api',
+    timeout: 3000,
+  })
+
+  client.interceptors.request.use((config) => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`
+    }
+    return config
+  })
+
+  client.interceptors.response.use(
+    (response) => response,
+    (error) => {
+      // 401 → sesión expirada
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+        return Promise.reject(error)
+      }
+
+      // Error de red → intentar mock de emergencia
+      if (!error.response || error.code === 'ECONNABORTED') {
+        const result = mockHandler(error.config)
+        if (result) {
+          if (result.status >= 400) {
+            return Promise.reject({ response: { status: result.status, data: result.data } })
+          }
+          return Promise.resolve({ data: result.data })
+        }
+      }
+
       return Promise.reject(error)
     }
+  )
 
-    // Network error o timeout → intentar mock
-    if (!error.response || error.code === 'ECONNABORTED') {
-      const result = mockHandler(error.config)
-      if (result) {
-        if (result.status >= 400) {
-          return Promise.reject({ response: { status: result.status, data: result.data } })
-        }
-        return Promise.resolve({ data: result.data })
-      }
-    }
+  return client
+}
 
-    return Promise.reject(error)
-  }
-)
+const API = createApiClient()
 
 export default API
