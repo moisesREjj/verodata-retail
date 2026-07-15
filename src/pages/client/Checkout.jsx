@@ -2,14 +2,137 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useCart } from '@/context/CartContext'
+import { useAuth } from '@/context/AuthContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
+import { Badge } from '@/components/ui/badge'
 import {
   CreditCard, CheckCircle, ArrowLeft, ShoppingBag, Store,
-  Truck, ShieldCheck, Wallet, Landmark,
+  Truck, ShieldCheck, Wallet, Landmark, Smartphone, Building2, XCircle,
+  Eye, EyeOff,
 } from 'lucide-react'
+import API from '@/lib/api'
+
+function VisaLogo() {
+  return (
+    <svg viewBox="0 0 50 16" className="h-4 w-12">
+      <rect width="50" height="16" rx="2" fill="#1A1F71"/>
+      <text x="25" y="12" textAnchor="middle" fill="#fff" fontSize="9" fontFamily="Arial" fontWeight="bold">VISA</text>
+    </svg>
+  )
+}
+
+function MastercardLogo() {
+  return (
+    <svg viewBox="0 0 36 22" className="h-4 w-7">
+      <circle cx="13" cy="11" r="9" fill="#EB001B"/>
+      <circle cx="23" cy="11" r="9" fill="#F79E1B"/>
+      <path fill="#FF5F00" d="M18 4.5c1.8 1.3 3 3.4 3 6.5s-1.2 5.2-3 6.5c-1.8-1.3-3-3.4-3-6.5s1.2-5.2 3-6.5z"/>
+    </svg>
+  )
+}
+
+function AmexLogo() {
+  return (
+    <svg viewBox="0 0 36 22" className="h-4 w-7">
+      <rect width="36" height="22" rx="3" fill="#2E77BC"/>
+      <path fill="#fff" d="M4 5h28v12H4z" opacity="0"/>
+      <text x="18" y="15" textAnchor="middle" fill="#fff" fontSize="9" fontFamily="Arial" fontWeight="bold">AMEX</text>
+    </svg>
+  )
+}
+
+function DinersLogo() {
+  return (
+    <svg viewBox="0 0 36 22" className="h-4 w-7">
+      <rect width="36" height="22" rx="3" fill="#004EA8"/>
+      <text x="18" y="15" textAnchor="middle" fill="#fff" fontSize="7" fontFamily="Arial" fontWeight="bold">DINERS</text>
+    </svg>
+  )
+}
+
+function DiscoverLogo() {
+  return (
+    <svg viewBox="0 0 36 22" className="h-4 w-7">
+      <rect width="36" height="22" rx="3" fill="#231F20"/>
+      <text x="18" y="15" textAnchor="middle" fill="#fff" fontSize="6" fontFamily="Arial" fontWeight="bold">DISCOVER</text>
+    </svg>
+  )
+}
+
+function EloLogo() {
+  return (
+    <svg viewBox="0 0 36 22" className="h-4 w-7">
+      <rect width="36" height="22" rx="3" fill="#231F20"/>
+      <circle cx="14" cy="11" r="5" fill="#FFC107"/>
+      <circle cx="18" cy="11" r="5" fill="#E0115F" opacity="0.7"/>
+      <circle cx="22" cy="11" r="5" fill="#00A4E4" opacity="0.7"/>
+    </svg>
+  )
+}
+
+function HipercardLogo() {
+  return (
+    <svg viewBox="0 0 36 22" className="h-4 w-7">
+      <rect width="36" height="22" rx="3" fill="#B3131B"/>
+      <text x="18" y="15" textAnchor="middle" fill="#fff" fontSize="6" fontFamily="Arial" fontWeight="bold">HIPER</text>
+    </svg>
+  )
+}
+
+function CardLogo({ brand }) {
+  if (!brand) return null
+  switch (brand.label) {
+    case 'Visa': return <VisaLogo />
+    case 'Mastercard': return <MastercardLogo />
+    case 'American Express': return <AmexLogo />
+    case 'Diners Club': return <DinersLogo />
+    case 'Discover': return <DiscoverLogo />
+    case 'Elo': return <EloLogo />
+    case 'Hipercard': return <HipercardLogo />
+    default: return null
+  }
+}
+
+const CARD_BRANDS = [
+  { pattern: /^4/, label: 'Visa', comp: VisaLogo, lengths: [13, 16, 19] },
+  { pattern: /^5[1-5]/, label: 'Mastercard', comp: MastercardLogo, lengths: [16] },
+  { pattern: /^3[47]/, label: 'American Express', comp: AmexLogo, lengths: [15] },
+  { pattern: /^3(?:0[0-5]|[68])/, label: 'Diners Club', comp: DinersLogo, lengths: [14] },
+  { pattern: /^6(?:011|5)/, label: 'Discover', comp: DiscoverLogo, lengths: [16, 19] },
+  { pattern: /^506[7]|^4576|^4011|^438935|^504175|^627780|^636368/, label: 'Elo', comp: EloLogo, lengths: [16] },
+  { pattern: /^606282|^3841/, label: 'Hipercard', comp: HipercardLogo, lengths: [16] },
+]
+
+function detectCardBrand(numero) {
+  const clean = numero.replace(/\D/g, '')
+  for (const brand of CARD_BRANDS) {
+    if (brand.pattern.test(clean)) return brand
+  }
+  return null
+}
+
+function formatCardNumber(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 19)
+  const brand = detectCardBrand(digits)
+  const groups = brand?.label === 'American Express' ? [4, 6, 5] : [4, 4, 4, 4]
+  const parts = []
+  let i = 0
+  for (const g of groups) {
+    parts.push(digits.slice(i, i + g))
+    i += g
+    if (i >= digits.length) break
+  }
+  return parts.filter(Boolean).join(' ')
+}
+
+function formatExpiry(value) {
+  const digits = value.replace(/\D/g, '').slice(0, 4)
+  if (digits.length >= 3) return digits.slice(0, 2) + '/' + digits.slice(2)
+  return digits
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -23,25 +146,128 @@ const stagger = {
 
 export default function Checkout() {
   const { items, totalPrice, clearCart } = useCart()
+  const { user } = useAuth()
   const navigate = useNavigate()
-  const [paymentMethod, setPaymentMethod] = useState('card')
+  const [paymentMethod, setPaymentMethod] = useState('Tarjeta')
   const [processing, setProcessing] = useState(false)
   const [completed, setCompleted] = useState(false)
+  const [error, setError] = useState(null)
+  const [transaccionId, setTransaccionId] = useState(null)
   const [form, setForm] = useState({
     nombre: '',
     direccion: '',
     ciudad: '',
     codigoPostal: '',
+    telefono: '',
+    numeroTarjeta: '',
+    expiracion: '',
+    cvv: '',
   })
+  const [errors, setErrors] = useState({})
+  const [showCVV, setShowCVV] = useState(false)
 
-  const handleSubmit = (e) => {
+  function validateField(name, value) {
+    switch (name) {
+      case 'nombre':
+        return /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/.test(value) ? '' : 'Solo letras'
+      case 'direccion':
+        return value.length > 0 ? '' : 'Requerido'
+      case 'ciudad':
+        return /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/.test(value) ? '' : 'Solo letras'
+      case 'codigoPostal':
+        return /^\d{0,10}$/.test(value) ? '' : 'Solo números'
+      case 'telefono':
+        return /^\d{0,15}$/.test(value) ? '' : 'Solo números'
+      case 'numeroTarjeta':
+        return /^\d*$/.test(value) ? '' : 'Solo números'
+      case 'expiracion':
+        return /^\d*$/.test(value) ? '' : 'Solo números'
+      case 'cvv':
+        return /^\d*$/.test(value) ? '' : 'Solo números'
+      default:
+        return ''
+    }
+  }
+
+  function handleChange(name, value) {
+    let clean = value
+    if (['codigoPostal', 'telefono', 'numeroTarjeta', 'cvv', 'expiracion'].includes(name)) {
+      clean = value.replace(/\D/g, '')
+    }
+    if (['nombre', 'ciudad'].includes(name)) {
+      clean = value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, '')
+    }
+    update(name, clean)
+    const err = validateField(name, clean)
+    setErrors((prev) => ({ ...prev, [name]: err }))
+  }
+
+  function validateForm() {
+    const newErrors = {}
+    if (!form.nombre.trim()) newErrors.nombre = 'Requerido'
+    if (!form.direccion.trim()) newErrors.direccion = 'Requerido'
+    if (!form.ciudad.trim()) newErrors.ciudad = 'Requerido'
+    if (!form.codigoPostal.trim()) newErrors.codigoPostal = 'Requerido'
+    if (!form.telefono.trim()) newErrors.telefono = 'Requerido'
+
+    if (paymentMethod === 'Tarjeta') {
+      if (!form.numeroTarjeta) newErrors.numeroTarjeta = 'Requerido'
+      else if (form.numeroTarjeta.length < 13) newErrors.numeroTarjeta = 'Número inválido'
+
+      if (!form.expiracion) newErrors.expiracion = 'Requerido'
+      else if (form.expiracion.length < 4) newErrors.expiracion = 'Fecha inválida'
+      else {
+        const mm = parseInt(form.expiracion.slice(0, 2), 10)
+        const yy = parseInt('20' + form.expiracion.slice(2), 10)
+        if (mm < 1 || mm > 12) newErrors.expiracion = 'Mes inválido'
+        else {
+          const now = new Date()
+          const exp = new Date(yy, mm)
+          if (exp < now) newErrors.expiracion = 'Tarjeta vencida'
+        }
+      }
+
+      if (!form.cvv) newErrors.cvv = 'Requerido'
+      else if (form.cvv.length < 3) newErrors.cvv = 'CVV inválido'
+    }
+
+    if (paymentMethod === 'Yape' || paymentMethod === 'Plin') {
+      if (form.telefono.length < 9) newErrors.telefono = 'Mínimo 9 dígitos'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    if (!validateForm()) return
     setProcessing(true)
-    setTimeout(() => {
-      setProcessing(false)
+    setError(null)
+
+    try {
+      const datosPago = { telefono: form.telefono }
+      if (paymentMethod === 'Tarjeta') {
+        datosPago.numeroTarjeta = form.numeroTarjeta.replace(/\s/g, '')
+        datosPago.expiracion = form.expiracion
+        datosPago.cvv = form.cvv
+      }
+
+      const res = await API.post('/pagos/procesar', {
+        pedido_id: 1,
+        metodo_pago: paymentMethod,
+        datos_pago: datosPago,
+      })
+
+      setTransaccionId(res.data.transaccion_id)
       setCompleted(true)
       clearCart()
-    }, 2000)
+    } catch (err) {
+      const errorData = err.response?.data?.error || { mensaje: 'Error al procesar el pago.' }
+      setError(errorData)
+    } finally {
+      setProcessing(false)
+    }
   }
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
@@ -73,6 +299,11 @@ export default function Checkout() {
               <h2 className="font-['Oswald',sans-serif] text-3xl font-black uppercase tracking-tighter">
                 Pedido Confirmado
               </h2>
+              {transaccionId && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Transacci&oacute;n: <span className="font-mono text-emerald-400">{transaccionId}</span>
+                </p>
+              )}
               <p className="mt-3 text-sm font-light text-muted-foreground">
                 Gracias por tu compra. Recibir&aacute;s un correo con los detalles
                 de env&iacute;o a la brevedad.
@@ -183,11 +414,11 @@ export default function Checkout() {
                       <Input
                         id="nombre"
                         value={form.nombre}
-                        onChange={(e) => update('nombre', e.target.value)}
+                        onChange={(e) => handleChange('nombre', e.target.value)}
                         placeholder="Ej: Juan Pérez"
-                        className="h-11 rounded-lg border-border/50"
-                        required
+                        className={`h-11 rounded-lg ${errors.nombre ? 'border-red-500' : 'border-border/50'}`}
                       />
+                      {errors.nombre && <p className="mt-1 text-xs text-red-400">{errors.nombre}</p>}
                     </div>
                     <div>
                       <label htmlFor="direccion" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -198,9 +429,9 @@ export default function Checkout() {
                         value={form.direccion}
                         onChange={(e) => update('direccion', e.target.value)}
                         placeholder="Ej: Calle Roma 123"
-                        className="h-11 rounded-lg border-border/50"
-                        required
+                        className={`h-11 rounded-lg ${errors.direccion ? 'border-red-500' : 'border-border/50'}`}
                       />
+                      {errors.direccion && <p className="mt-1 text-xs text-red-400">{errors.direccion}</p>}
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
@@ -210,11 +441,11 @@ export default function Checkout() {
                         <Input
                           id="ciudad"
                           value={form.ciudad}
-                          onChange={(e) => update('ciudad', e.target.value)}
+                          onChange={(e) => handleChange('ciudad', e.target.value)}
                           placeholder="Ej: Milán"
-                          className="h-11 rounded-lg border-border/50"
-                          required
+                          className={`h-11 rounded-lg ${errors.ciudad ? 'border-red-500' : 'border-border/50'}`}
                         />
+                        {errors.ciudad && <p className="mt-1 text-xs text-red-400">{errors.ciudad}</p>}
                       </div>
                       <div>
                         <label htmlFor="codigoPostal" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -223,11 +454,11 @@ export default function Checkout() {
                         <Input
                           id="codigoPostal"
                           value={form.codigoPostal}
-                          onChange={(e) => update('codigoPostal', e.target.value)}
+                          onChange={(e) => handleChange('codigoPostal', e.target.value)}
                           placeholder="12345"
-                          className="h-11 rounded-lg border-border/50"
-                          required
+                          className={`h-11 rounded-lg ${errors.codigoPostal ? 'border-red-500' : 'border-border/50'}`}
                         />
+                        {errors.codigoPostal && <p className="mt-1 text-xs text-red-400">{errors.codigoPostal}</p>}
                       </div>
                     </div>
                   </div>
@@ -244,9 +475,11 @@ export default function Checkout() {
                   </h2>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {[
-                      { id: 'card', icon: CreditCard, label: 'Tarjeta', desc: 'Visa · MC · Amex' },
-                      { id: 'paypal', icon: Wallet, label: 'PayPal', desc: 'Pago seguro online' },
-                      { id: 'transfer', icon: Landmark, label: 'Transferencia', desc: 'Depósito bancario' },
+                      { id: 'Tarjeta', icon: CreditCard, label: 'Tarjeta', desc: 'Visa · MasterCard · Amex' },
+                      { id: 'Yape', icon: Smartphone, label: 'Yape', desc: 'Pago desde tu app Yape' },
+                      { id: 'Plin', icon: Smartphone, label: 'Plin', desc: 'Pago desde tu app Plin' },
+                      { id: 'PagoEfectivo', icon: Building2, label: 'PagoEfectivo', desc: 'Código de pago' },
+                      { id: 'Transferencia', icon: Landmark, label: 'Transferencia', desc: 'Depósito bancario' },
                     ].map((m) => {
                       const Icon = m.icon
                       const active = paymentMethod === m.id
@@ -274,8 +507,110 @@ export default function Checkout() {
                       )
                     })}
                   </div>
+
+                  {(paymentMethod === 'Yape' || paymentMethod === 'Plin') && (
+                    <div className="mt-4">
+                      <label htmlFor="telefono" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                        N&uacute;mero de Tel&eacute;fono
+                      </label>
+                      <Input
+                        id="telefono"
+                        value={form.telefono}
+                        onChange={(e) => handleChange('telefono', e.target.value)}
+                        placeholder="Ej: 987654321"
+                        className={`h-11 rounded-lg font-mono ${errors.telefono ? 'border-red-500' : 'border-border/50'}`}
+                      />
+                      {errors.telefono && <p className="mt-1 text-xs text-red-400">{errors.telefono}</p>}
+                    </div>
+                  )}
+
+                  {paymentMethod === 'Tarjeta' && (
+                    <div className="mt-4 space-y-4">
+                      <div className="relative">
+                        <label htmlFor="numeroTarjeta" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          N&uacute;mero de Tarjeta
+                        </label>
+                        <div className="relative">
+                          <Input
+                            id="numeroTarjeta"
+                            value={formatCardNumber(form.numeroTarjeta)}
+                            onChange={(e) => handleChange('numeroTarjeta', e.target.value.replace(/\s/g, ''))}
+                            placeholder="Ej: 4111 1111 1111 1111"
+                            className={`h-11 rounded-lg font-mono pr-10 ${errors.numeroTarjeta ? 'border-red-500' : 'border-border/50'}`}
+                            maxLength={23}
+                          />
+                          {form.numeroTarjeta.length >= 4 && (() => {
+                            const brand = detectCardBrand(form.numeroTarjeta)
+                            return brand ? (
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                                <CardLogo brand={brand} />
+                              </span>
+                            ) : null
+                          })()}
+                        </div>
+                        {errors.numeroTarjeta && <p className="mt-1 text-xs text-red-400">{errors.numeroTarjeta}</p>}
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="expiracion" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            Vencimiento
+                          </label>
+                          <Input
+                            id="expiracion"
+                            value={formatExpiry(form.expiracion)}
+                            onChange={(e) => handleChange('expiracion', e.target.value.replace(/\D/g, ''))}
+                            placeholder="MM/AA"
+                            className={`h-11 rounded-lg font-mono ${errors.expiracion ? 'border-red-500' : 'border-border/50'}`}
+                            maxLength={5}
+                          />
+                          {errors.expiracion && <p className="mt-1 text-xs text-red-400">{errors.expiracion}</p>}
+                        </div>
+                        <div>
+                          <label htmlFor="cvv" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            CVV
+                          </label>
+                          <div className="relative">
+                            <Input
+                              id="cvv"
+                              type={showCVV ? 'text' : 'password'}
+                              value={form.cvv}
+                              onChange={(e) => handleChange('cvv', e.target.value.replace(/\D/g, '').slice(0, 4))}
+                              placeholder="123"
+                              className={`h-11 rounded-lg font-mono pr-10 ${errors.cvv ? 'border-red-500' : 'border-border/50'}`}
+                              maxLength={4}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowCVV(!showCVV)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                            >
+                              {showCVV ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          </div>
+                          {errors.cvv && <p className="mt-1 text-xs text-red-400">{errors.cvv}</p>}
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Prueba: 4111 1111 1111 1111 (éxito) &middot; 4000 0000 0000 0002 (falla)
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
+
+              {error && (
+                <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-4">
+                  <div className="flex items-start gap-3">
+                    <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-400" />
+                    <div>
+                      <p className="text-sm font-medium text-rose-400">Pago rechazado</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {error.mensaje || 'Error desconocido'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <Button
                 type="submit"

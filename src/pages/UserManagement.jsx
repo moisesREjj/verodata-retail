@@ -28,6 +28,8 @@ export default function UserManagement() {
   const [selectedUser, setSelectedUser] = useState(null)
 
   const [showPassword, setShowPassword] = useState(false)
+  
+  // MODIFICACIÓN 1: El estado inicial ahora usa 'ROLE_CLIENTE' por defecto pero el flujo enviará el rol seleccionado
   const [createForm, setCreateForm] = useState({ nombre: '', email: '', password: '', rol: 'ROLE_CLIENTE' })
   const [editForm, setEditForm] = useState({ nombre: '', email: '' })
 
@@ -36,7 +38,7 @@ export default function UserManagement() {
       const res = await API.get('/auth/usuarios')
       setUsers(res.data)
     } catch (err) {
-      console.error(err)
+      console.error("Error al obtener usuarios:", err)
     } finally {
       setLoading(false)
     }
@@ -49,12 +51,21 @@ export default function UserManagement() {
   const handleCreate = async (e) => {
     e.preventDefault()
     try {
+      // MODIFICACIÓN 2: Se añade un log para verificar en consola qué datos se están mandando al backend
+      console.log("Enviando datos de registro:", createForm)
+      
       await API.post('/auth/registrar', createForm)
+      
+      // Si todo sale bien, cerramos el modal, limpiamos el formulario y recargamos la lista
       setCreateOpen(false)
       setCreateForm({ nombre: '', email: '', password: '', rol: 'ROLE_CLIENTE' })
       fetchUsers()
+      alert("¡Usuario creado con éxito!")
     } catch (err) {
-      console.error(err)
+      console.error("Error detallado al registrar:", err)
+      // MODIFICACIÓN 3: Alerta visible para no tragar el error si la base de datos o el backend lo rechazan
+      const mensajeError = err.response?.data?.mensaje || err.response?.data?.error || "Error desconocido al registrar usuario."
+      alert(`No se pudo crear el usuario: ${mensajeError}`)
     }
   }
 
@@ -68,6 +79,7 @@ export default function UserManagement() {
       fetchUsers()
     } catch (err) {
       console.error(err)
+      alert("Error al editar usuario.")
     }
   }
 
@@ -80,6 +92,7 @@ export default function UserManagement() {
       fetchUsers()
     } catch (err) {
       console.error(err)
+      alert("Error al eliminar usuario.")
     }
   }
 
@@ -179,6 +192,8 @@ export default function UserManagement() {
                       <SelectContent>
                         <SelectItem value="ROLE_CLIENTE">Cliente</SelectItem>
                         <SelectItem value="ROLE_ADMIN">Administrador</SelectItem>
+                        {/* MODIFICACIÓN 4: Añadido el ítem "Analista" que envía "ROLE_ANALISTA" */}
+                        <SelectItem value="ROLE_ANALISTA">Analista</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -240,10 +255,13 @@ export default function UserManagement() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">{user.email}</TableCell>
                     <TableCell>
+                      {/* MODIFICACIÓN 5: Adaptada la visualización del Badge para soportar ROLE_ANALISTA */}
                       <Badge
                         variant={
                           user.rol?.nombre === 'ROLE_ADMIN' || user.rol === 'ROLE_ADMIN'
                             ? 'default'
+                            : user.rol?.nombre === 'ROLE_ANALISTA' || user.rol === 'ROLE_ANALISTA'
+                            ? 'outline' // Estilo alternativo para Analista
                             : 'secondary'
                         }
                       >

@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
+import { ROLES } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
@@ -18,26 +19,57 @@ import {
   AlertTriangle,
   UserPlus,
   ShoppingBag,
+  BarChart3,
+  TrendingUp,
+  Package,
+  CreditCard,
   X,
+  Tag,
+  ClipboardList,
+  Wallet,
+  Boxes,
 } from 'lucide-react'
+import API from '@/lib/api'
 
-const notifications = [
-  { id: 1, icon: AlertTriangle, text: 'iPhone 15 Pro con stock crítico (3 restantes)', time: 'Hace 5 min', bg: 'bg-amber-500/20', iconColor: 'text-amber-400' },
-  { id: 2, icon: UserPlus, text: 'Nuevo usuario registrado: María García', time: 'Hace 1 hora', bg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' },
-  { id: 3, icon: ShoppingBag, text: 'Pedido ORD-004 pagado - S/480.00', time: 'Hace 2 horas', bg: 'bg-blue-500/20', iconColor: 'text-blue-400' },
-  { id: 4, icon: AlertTriangle, text: 'Samsung TV 55" sin stock', time: 'Hace 3 horas', bg: 'bg-amber-500/20', iconColor: 'text-amber-400' },
-  { id: 5, icon: UserPlus, text: 'Nuevo usuario registrado: Pedro Martínez', time: 'Hace 1 día', bg: 'bg-emerald-500/20', iconColor: 'text-emerald-400' },
-]
+const ALL_NAV_ITEMS = {
+  [ROLES.ADMIN]: [
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Resumen', end: true },
+    { to: '/dashboard/usuarios', icon: Users, label: 'Usuarios' },
+    { to: '/dashboard/productos', icon: Package, label: 'Productos' },
+    { to: '/dashboard/categorias', icon: Tag, label: 'Categorías' },
+    { to: '/dashboard/ordenes', icon: ClipboardList, label: 'Órdenes' },
+    { to: '/dashboard/pagos', icon: Wallet, label: 'Pagos' },
+    { to: '/dashboard/stock', icon: Boxes, label: 'Stock' },
+    { to: '/dashboard/ajustes', icon: Settings, label: 'Ajustes' },
+  ],
+  [ROLES.ANALISTA]: [
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Resumen', end: true },
+    { to: '/dashboard/analista/resumen', icon: BarChart3, label: 'KPIs' },
+    { to: '/dashboard/analista/ventas', icon: TrendingUp, label: 'Ventas' },
+    { to: '/dashboard/analista/productos', icon: Package, label: 'Productos' },
+    { to: '/dashboard/analista/pagos', icon: CreditCard, label: 'Pagos' },
+    { to: '/dashboard/analista/clientes', icon: Users, label: 'Clientes' },
+    { to: '/dashboard/analista/auditoria', icon: AlertTriangle, label: 'Auditoría' },
+    { to: '/dashboard/ajustes', icon: Settings, label: 'Ajustes' },
+  ],
+}
 
-const navItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Resumen', end: true },
-  { to: '/dashboard/usuarios', icon: Users, label: 'Usuarios' },
-  { to: '/dashboard/ajustes', icon: Settings, label: 'Ajustes' },
-]
+const iconMap = {
+  stock: { icon: AlertTriangle, bg: 'bg-amber-500/20', color: 'text-amber-400' },
+  usuario: { icon: UserPlus, bg: 'bg-emerald-500/20', color: 'text-emerald-400' },
+  pedido: { icon: ShoppingBag, bg: 'bg-blue-500/20', color: 'text-blue-400' },
+}
 
 export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false)
+  const [notifications, setNotifications] = useState([])
   const { user, logout } = useAuth()
+
+  useEffect(() => {
+    API.get('/dashboard/notificaciones')
+      .then((res) => setNotifications(res.data || []))
+      .catch(() => {})
+  }, [])
 
   const initials = user?.nombre
     ? user.nombre.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
@@ -60,7 +92,7 @@ export default function DashboardLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
-          {navItems.map((item) => (
+          {(ALL_NAV_ITEMS[user?.rol] || ALL_NAV_ITEMS[ROLES.ADMIN]).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -110,7 +142,9 @@ export default function DashboardLayout() {
               <PopoverTrigger asChild>
                 <button className="relative rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground">
                   <Bell className="h-5 w-5" />
-                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive" />
+                  {notifications.length > 0 && (
+                    <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-destructive" />
+                  )}
                 </button>
               </PopoverTrigger>
               <PopoverContent className="w-80 p-0" align="end">
@@ -121,17 +155,27 @@ export default function DashboardLayout() {
                   </span>
                 </div>
                 <ScrollArea className="max-h-72">
-                  {notifications.map((n) => (
-                    <div key={n.id} className="flex gap-3 border-b px-4 py-3 last:border-0 hover:bg-muted/50 transition-colors">
-                      <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${n.bg}`}>
-                        <n.icon className={`h-3.5 w-3.5 ${n.iconColor}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-foreground">{n.text}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">{n.time}</p>
-                      </div>
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center text-xs text-muted-foreground">
+                      No hay notificaciones
                     </div>
-                  ))}
+                  ) : (
+                    notifications.map((n) => {
+                      const info = iconMap[n.tipo] || { icon: Bell, bg: 'bg-muted', color: 'text-muted-foreground' }
+                      const IconComp = info.icon
+                      return (
+                        <div key={n.id} className="flex gap-3 border-b px-4 py-3 last:border-0 hover:bg-muted/50 transition-colors">
+                          <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${info.bg}`}>
+                            <IconComp className={`h-3.5 w-3.5 ${info.color}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs text-foreground">{n.texto}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">{n.tiempo}</p>
+                          </div>
+                        </div>
+                      )
+                    })
+                  )}
                 </ScrollArea>
               </PopoverContent>
             </Popover>

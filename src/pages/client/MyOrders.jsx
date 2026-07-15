@@ -1,58 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Package, ChevronDown, ChevronUp } from 'lucide-react'
-
-const initialOrders = [
-  {
-    id: 'ORD-001',
-    date: '2026-06-28',
-    status: 'Pagado',
-    total: 4230.00,
-    items: [
-      { name: 'iPhone 15 Pro', quantity: 1, price: 3746 },
-      { name: 'Auriculares Bose', quantity: 1, price: 484 },
-    ],
-  },
-  {
-    id: 'ORD-002',
-    date: '2026-06-25',
-    status: 'Enviado',
-    total: 334.00,
-    items: [
-      { name: 'Zapatillas Adidas', quantity: 1, price: 334 },
-    ],
-  },
-  {
-    id: 'ORD-003',
-    date: '2026-06-20',
-    status: 'Cancelado',
-    total: 746.00,
-    items: [
-      { name: 'Chaqueta de Cuero', quantity: 1, price: 746 },
-    ],
-  },
-  {
-    id: 'ORD-004',
-    date: '2026-06-15',
-    status: 'Pagado',
-    total: 480.00,
-    items: [
-      { name: 'Set de Sartenes', quantity: 1, price: 334 },
-      { name: 'Lámpara LED', quantity: 1, price: 146 },
-    ],
-  },
-  {
-    id: 'ORD-005',
-    date: '2026-06-10',
-    status: 'Carrito',
-    total: 244.00,
-    items: [
-      { name: 'Harry Potter Box Set', quantity: 1, price: 244 },
-    ],
-  },
-]
+import API from '@/lib/api'
 
 const statusColors = {
   Pagado: 'success',
@@ -62,10 +13,29 @@ const statusColors = {
 }
 
 export default function MyOrders() {
+  const [orders, setOrders] = useState([])
+  const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(null)
+
+  useEffect(() => {
+    API.get('/pedidos/mis-pedidos')
+      .then((res) => setOrders(res.data || []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   const toggleExpand = (id) => {
     setExpanded(expanded === id ? null : id)
+  }
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
+        <div className="flex items-center justify-center h-64">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -77,7 +47,7 @@ export default function MyOrders() {
         </p>
       </div>
 
-      {initialOrders.length === 0 ? (
+      {orders.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <Package className="mb-4 h-16 w-16" />
           <p className="text-lg font-medium">No tienes pedidos aún</p>
@@ -85,7 +55,7 @@ export default function MyOrders() {
         </div>
       ) : (
         <div className="space-y-3">
-          {initialOrders.map((order) => (
+          {orders.map((order) => (
             <Card key={order.id} className="border-border/50 transition-all hover:shadow-md">
               <CardHeader className="cursor-pointer pb-3" onClick={() => toggleExpand(order.id)}>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -94,15 +64,17 @@ export default function MyOrders() {
                       <Package className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">{order.id}</p>
-                      <p className="text-xs text-muted-foreground">{order.date}</p>
+                      <p className="text-sm font-semibold">{order.codigo}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(order.fecha || order.created_at).toLocaleDateString()}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <p className="text-sm font-semibold">S/{order.total.toFixed(2)}</p>
+                      <p className="text-sm font-semibold">S/{Number(order.total).toFixed(2)}</p>
                     </div>
-                    <Badge variant={statusColors[order.status]}>{order.status}</Badge>
+                    <Badge variant={statusColors[order.estado] || 'default'}>{order.estado}</Badge>
                     <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
                       {expanded === order.id ? (
                         <ChevronUp className="h-4 w-4" />
@@ -116,17 +88,17 @@ export default function MyOrders() {
               {expanded === order.id && (
                 <CardContent className="pb-4 pt-0">
                   <div className="space-y-2 border-t pt-3">
-                    {order.items.map((item, i) => (
+                    {(order.pedido_items || []).map((item, i) => (
                       <div key={i} className="flex items-center justify-between text-sm">
                         <span className="text-muted-foreground">
-                          {item.name} <span className="text-xs">x{item.quantity}</span>
+                          {item.productos?.nombre || `Producto #${item.id_producto}`} <span className="text-xs">x{item.cantidad}</span>
                         </span>
-                        <span className="font-medium">S/{(item.price * item.quantity).toFixed(2)}</span>
+                        <span className="font-medium">S/{(Number(item.precio_unitario) * item.cantidad).toFixed(2)}</span>
                       </div>
                     ))}
                     <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
                       <span>Total</span>
-                      <span>S/{order.total.toFixed(2)}</span>
+                      <span>S/{Number(order.total).toFixed(2)}</span>
                     </div>
                   </div>
                 </CardContent>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { useCart } from '@/context/CartContext'
@@ -12,23 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Store, ShoppingCart, Package2, LogOut, Minus, Plus, Trash2, ChevronRight, House,
 } from 'lucide-react'
-
-const products = [
-  { id: 1, name: 'iPhone 15 Pro', category: 'Electrónicos', price: 3746, stock: 3, image: 'https://picsum.photos/seed/iphone/400/300' },
-  { id: 2, name: 'Nike Air Max', category: 'Ropa', price: 484, stock: 2, image: 'https://picsum.photos/seed/nike/400/300' },
-  { id: 3, name: 'Samsung TV 55"', category: 'Electrónicos', price: 2996, stock: 1, image: 'https://picsum.photos/seed/samsungtv/400/300' },
-  { id: 4, name: 'Set de Sartenes', category: 'Hogar', price: 334, stock: 2, image: 'https://picsum.photos/seed/sartenes/400/300' },
-  { id: 5, name: 'Libro Clean Code', category: 'Libros', price: 169, stock: 4, image: 'https://picsum.photos/seed/cleancode/400/300' },
-  { id: 6, name: 'MacBook Air M3', category: 'Electrónicos', price: 4871, stock: 5, image: 'https://picsum.photos/seed/macbook/400/300' },
-  { id: 7, name: 'Chaqueta de Cuero', category: 'Ropa', price: 746, stock: 6, image: 'https://picsum.photos/seed/chaqueta/400/300' },
-  { id: 8, name: 'Lámpara LED', category: 'Hogar', price: 146, stock: 8, image: 'https://picsum.photos/seed/lampara/400/300' },
-  { id: 9, name: 'Balón de Fútbol', category: 'Deportes', price: 109, stock: 10, image: 'https://picsum.photos/seed/balon/400/300' },
-  { id: 10, name: 'Harry Potter Box Set', category: 'Libros', price: 244, stock: 7, image: 'https://picsum.photos/seed/harrypotter/400/300' },
-  { id: 11, name: 'Auriculares Bose', category: 'Electrónicos', price: 1309, stock: 4, image: 'https://picsum.photos/seed/bose/400/300' },
-  { id: 12, name: 'Zapatillas Adidas', category: 'Ropa', price: 334, stock: 3, image: 'https://picsum.photos/seed/adidas/400/300' },
-]
-
-export { products }
+import API from '@/lib/api'
 
 const navLinkClass = ({ isActive }) =>
   `text-sm font-medium transition-colors hover:text-foreground ${
@@ -39,6 +23,25 @@ export default function ClientLayout() {
   const { user, logout } = useAuth()
   const { items, addItem, removeItem, updateQuantity, totalItems, totalPrice } = useCart()
   const [cartOpen, setCartOpen] = useState(false)
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    API.get('/productos')
+      .then((res) => {
+        const mapped = (res.data || []).map((p) => ({
+          id: p.id,
+          name: p.nombre,
+          category: p.categorias?.nombre || 'General',
+          price: Number(p.precio),
+          stock: p.stock,
+          image: p.imagen_url || 'https://placehold.co/400x300/1a1a1a/ffffff?text=Producto',
+        }))
+        setProducts(mapped)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   const initials = user?.nombre?.[0]?.toUpperCase() || 'C'
 
@@ -179,7 +182,6 @@ export default function ClientLayout() {
           </div>
         </div>
 
-        {/* Mobile nav */}
         <div className="flex items-center justify-around border-t px-4 py-2 md:hidden">
           <NavLink to="/" end className={navLinkClass}>
             <House className="mx-auto h-5 w-5" />
@@ -197,7 +199,7 @@ export default function ClientLayout() {
       </header>
 
       <main className="flex-1">
-        <Outlet context={{ products, addItem }} />
+        <Outlet context={{ products, loading, addItem }} />
       </main>
     </div>
   )

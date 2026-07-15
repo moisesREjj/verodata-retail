@@ -16,8 +16,11 @@ export function ProtectedRoute({ children, role }) {
     return <Navigate to="/login" replace />
   }
 
-  if (role && user.rol !== role) {
-    return <Navigate to={user.rol === 'ROLE_ADMIN' ? '/dashboard' : '/'} replace />
+  if (role) {
+    const allowedRoles = Array.isArray(role) ? role : [role]
+    if (!allowedRoles.includes(user.rol)) {
+      return <Navigate to={user.rol === 'ROLE_CLIENTE' ? '/' : '/dashboard'} replace />
+    }
   }
 
   return children

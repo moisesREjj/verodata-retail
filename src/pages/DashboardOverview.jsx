@@ -8,42 +8,11 @@ import {
   BarChart, Bar, Legend,
 } from 'recharts'
 import { TrendingUp, DollarSign, Users, AlertTriangle, ShoppingCart, Package } from 'lucide-react'
+import API from '@/lib/api'
 
-const TIPO_CAMBIO = 3.75
+const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#06b6d4', '#10b981', '#f59e0b', '#ef4444']
 
-const salesData = [
-  { day: 'Lun', ventas: 15750, proyeccion: 15000 },
-  { day: 'Mar', ventas: 14250, proyeccion: 14625 },
-  { day: 'Mie', ventas: 19125, proyeccion: 18000 },
-  { day: 'Jue', ventas: 17250, proyeccion: 16875 },
-  { day: 'Vie', ventas: 22125, proyeccion: 19500 },
-  { day: 'Sab', ventas: 23625, proyeccion: 20625 },
-  { day: 'Dom', ventas: 18000, proyeccion: 18750 },
-]
-
-const categoryData = [
-  { name: 'Electrónicos', value: 35 },
-  { name: 'Ropa', value: 25 },
-  { name: 'Hogar', value: 20 },
-  { name: 'Deportes', value: 12 },
-  { name: 'Libros', value: 8 },
-]
-
-const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#06b6d4', '#10b981']
-
-const orderStatusData = [
-  { name: 'Carrito', value: 45 },
-  { name: 'Pagado', value: 120 },
-  { name: 'Cancelado', value: 15 },
-]
-
-const stockAlerts = [
-  { product: 'iPhone 15 Pro', stock: 3, category: 'Electrónicos' },
-  { product: 'Nike Air Max', stock: 2, category: 'Ropa' },
-  { product: 'Samsung TV 55"', stock: 1, category: 'Electrónicos' },
-  { product: 'Libro Clean Code', stock: 4, category: 'Libros' },
-  { product: 'Set de Sartenes', stock: 2, category: 'Hogar' },
-]
+const diasSemana = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab']
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -62,6 +31,8 @@ const CustomTooltip = ({ active, payload, label }) => {
 }
 
 export default function DashboardOverview() {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [stockAlertsEnabled, setStockAlertsEnabled] = useState(true)
 
   useEffect(() => {
@@ -70,6 +41,35 @@ export default function DashboardOverview() {
     window.addEventListener('storage', handleStorage)
     return () => window.removeEventListener('storage', handleStorage)
   }, [])
+
+  useEffect(() => {
+    API.get('/dashboard/resumen')
+      .then((res) => setData(res.data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground">
+        Error al cargar datos del dashboard
+      </div>
+    )
+  }
+
+  const ventasDiarias = data.ventas_diarias?.map((d, i) => ({
+    day: diasSemana[new Date(d.fecha).getDay()],
+    ventas: d.total,
+    proyeccion: d.proyeccion,
+  })) || []
 
   return (
     <div className="space-y-6">
@@ -91,10 +91,10 @@ export default function DashboardOverview() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">S/130,125</div>
-            <div className="mt-1 flex items-center gap-1 text-xs text-emerald-400">
-              <TrendingUp className="h-3 w-3" />
-              <span>+12.5% vs semana anterior</span>
+            <div className="text-3xl font-bold">S/{data.ventas_totales?.toLocaleString()}</div>
+            <div className={`mt-1 flex items-center gap-1 text-xs ${data.variacion_ventas >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <TrendingUp className={`h-3 w-3 ${data.variacion_ventas < 0 ? 'rotate-180' : ''}`} />
+              <span>{data.variacion_ventas >= 0 ? '+' : ''}{data.variacion_ventas?.toFixed(1)}% vs mes anterior</span>
             </div>
           </CardContent>
         </Card>
@@ -109,11 +109,7 @@ export default function DashboardOverview() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">S/481.88</div>
-            <div className="mt-1 flex items-center gap-1 text-xs text-emerald-400">
-              <TrendingUp className="h-3 w-3" />
-              <span>+5.2% vs mes anterior</span>
-            </div>
+            <div className="text-3xl font-bold">S/{data.ticket_promedio?.toFixed(2)}</div>
           </CardContent>
         </Card>
 
@@ -127,10 +123,10 @@ export default function DashboardOverview() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">+248</div>
-            <div className="mt-1 flex items-center gap-1 text-xs text-emerald-400">
-              <TrendingUp className="h-3 w-3" />
-              <span>+18.3% este mes</span>
+            <div className="text-3xl font-bold">+{data.clientes_nuevos}</div>
+            <div className={`mt-1 flex items-center gap-1 text-xs ${data.variacion_clientes >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              <TrendingUp className={`h-3 w-3 ${data.variacion_clientes < 0 ? 'rotate-180' : ''}`} />
+              <span>{data.variacion_clientes >= 0 ? '+' : ''}{data.variacion_clientes?.toFixed(1)}% vs mes anterior</span>
             </div>
           </CardContent>
         </Card>
@@ -144,16 +140,16 @@ export default function DashboardOverview() {
           <CardContent>
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={salesData}>
+                <AreaChart data={ventasDiarias}>
                   <defs>
                     <linearGradient id="ventasGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(240 3.7% 15.9%)" />
-                  <XAxis dataKey="day" stroke="hsl(240 5% 64.9%)" fontSize={12} />
-                  <YAxis stroke="hsl(240 5% 64.9%)" fontSize={12} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="day" stroke="var(--color-muted-foreground)" fontSize={12} />
+                  <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
                   <Tooltip content={<CustomTooltip />} />
                   <Area
                     type="monotone"
@@ -185,23 +181,27 @@ export default function DashboardOverview() {
             <CardContent>
               <ScrollArea className="h-[300px] pr-4">
                 <div className="space-y-3">
-                  {stockAlerts.map((item, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3"
-                    >
-                      <div className="mt-0.5 rounded-full bg-amber-500/20 p-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                  {data.alertas_stock?.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">No hay alertas de stock</p>
+                  ) : (
+                    data.alertas_stock?.map((item, i) => (
+                      <div
+                        key={i}
+                        className="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3"
+                      >
+                        <div className="mt-0.5 rounded-full bg-amber-500/20 p-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{item.nombre}</p>
+                          <p className="text-xs text-muted-foreground capitalize">{item.nivel?.replace('_', ' ')}</p>
+                        </div>
+                        <Badge variant="warning" className="shrink-0">
+                          {item.stock} restantes
+                        </Badge>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{item.product}</p>
-                        <p className="text-xs text-muted-foreground">{item.category}</p>
-                      </div>
-                      <Badge variant="warning" className="shrink-0">
-                        {item.stock} restantes
-                      </Badge>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </ScrollArea>
             </CardContent>
@@ -219,15 +219,16 @@ export default function DashboardOverview() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={categoryData}
+                    data={data.categorias_mas_vendidas}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
                     outerRadius={100}
                     paddingAngle={4}
-                    dataKey="value"
+                    dataKey="unidades"
+                    nameKey="nombre"
                   >
-                    {categoryData.map((entry, index) => (
+                    {(data.categorias_mas_vendidas || []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -252,20 +253,20 @@ export default function DashboardOverview() {
           <CardContent>
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={orderStatusData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(240 3.7% 15.9%)" />
-                  <XAxis dataKey="name" stroke="hsl(240 5% 64.9%)" fontSize={12} />
-                  <YAxis stroke="hsl(240 5% 64.9%)" fontSize={12} />
+                <BarChart data={data.pedidos_por_estado}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                  <XAxis dataKey="estado" stroke="var(--color-muted-foreground)" fontSize={12} />
+                  <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
                   <Tooltip
                     contentStyle={{
-                      background: 'hsl(240 10% 3.9%)',
-                      border: '1px solid hsl(240 3.7% 15.9%)',
+                      background: 'var(--color-muted)',
+                      border: '1px solid var(--color-border)',
                       borderRadius: '8px',
-                      color: '#f8fafc',
+                      color: 'var(--color-foreground)',
                     }}
                   />
-                  <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                    {orderStatusData.map((entry, index) => (
+                  <Bar dataKey="cantidad" radius={[6, 6, 0, 0]}>
+                    {(data.pedidos_por_estado || []).map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Bar>
