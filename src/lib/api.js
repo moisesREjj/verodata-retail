@@ -1,14 +1,12 @@
 import axios from 'axios'
 
-// Debe quedar así:
-const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'https://verodata-backend.onrender.com/api',
-  withCredentials: true
-});
+// 🟢 Definimos la URL base correcta usando variables de entorno o producción
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://verodata-backend.onrender.com/api'
 
 const client = axios.create({
-  baseURL: API_URL,
+  baseURL: BASE_URL,
   timeout: 10000,
+  withCredentials: true // Clave para mantener las cookies/sesiones activas
 })
 
 client.interceptors.request.use((config) => {
