@@ -48,13 +48,27 @@ export default function UserManagement() {
     fetchUsers()
   }, [fetchUsers])
 
-  const handleCreate = async (e) => {
+ const handleCreate = async (e) => {
     e.preventDefault()
     try {
-      // MODIFICACIÓN 2: Se añade un log para verificar en consola qué datos se están mandando al backend
-      console.log("Enviando datos de registro:", createForm)
+      // 🗺️ Mapeamos los roles de tipo string a sus IDs numéricos correspondientes en Supabase
+      const rolMapping = {
+        'ROLE_ADMIN': 1,
+        'ROLE_CLIENTE': 2,
+        'ROLE_ANALISTA': 3
+      }
+
+      // Preparamos los datos enviando 'id_rol' en lugar del string de texto
+      const datosRegistro = {
+        nombre: createForm.nombre,
+        email: createForm.email,
+        password: createForm.password,
+        id_rol: rolMapping[createForm.rol] || 2 // Por defecto 2 (Cliente) si algo falla
+      }
+
+      console.log("Enviando datos mapeados de registro:", datosRegistro)
       
-      await API.post('/auth/registrar', createForm)
+      await API.post('/auth/registrar', datosRegistro)
       
       // Si todo sale bien, cerramos el modal, limpiamos el formulario y recargamos la lista
       setCreateOpen(false)
@@ -63,7 +77,6 @@ export default function UserManagement() {
       alert("¡Usuario creado con éxito!")
     } catch (err) {
       console.error("Error detallado al registrar:", err)
-      // MODIFICACIÓN 3: Alerta visible para no tragar el error si la base de datos o el backend lo rechazan
       const mensajeError = err.response?.data?.mensaje || err.response?.data?.error || "Error desconocido al registrar usuario."
       alert(`No se pudo crear el usuario: ${mensajeError}`)
     }

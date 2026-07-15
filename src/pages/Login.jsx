@@ -35,18 +35,25 @@ export default function Login() {
 
       const userData = await login(email, password)
 
+      console.log("DEBUG LOGIN - Datos recibidos del usuario:", userData);
+
+      // 🚦 Control de redirección según el rol de usuario
       if (userData.rol === 'ROLE_ADMIN' || userData.rol === 'ROLE_SUPERADMIN') {
         navigate('/dashboard')
+      } else if (userData.rol === 'ROLE_ANALISTA') {
+        // 👇 Cambiado de '/analista' a '/dashboard/analista'
+        navigate('/dashboard/analista') 
       } else {
         navigate('/')
       }
+
     } catch (err) {
       const status = err.response?.status
       if (status === 401) setError('Contraseña incorrecta.')
       else if (status === 404) setError('El usuario con ese correo no está registrado.')
       else setError(err.response?.data?.mensaje || 'Error al conectar con el servidor.')
     } finally {
-      setLoading(false)
+      loading && setLoading(false)
     }
   }
 
