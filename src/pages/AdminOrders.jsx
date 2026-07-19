@@ -196,7 +196,15 @@ export default function AdminOrders() {
                   <p className="text-muted-foreground">Envío</p>
                   <p className="font-medium">{selectedOrder.nombre_envio || '-'}</p>
                   <p className="text-muted-foreground">{selectedOrder.direccion_envio || '-'}</p>
-                  {selectedOrder.ciudad_envio && <p>{selectedOrder.ciudad_envio}</p>}
+                  {selectedOrder.ciudad_envio && <p className="text-muted-foreground">{selectedOrder.ciudad_envio}</p>}
+                  
+                  {/* 💳 NUEVO: Método de Pago en el Panel del Admin */}
+                  <div className="mt-2 pt-2 border-t border-border/40">
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Método de Pago</p>
+                    <Badge variant="outline" className="mt-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/10 dark:text-emerald-400">
+                      {selectedOrder.metodo_pago || 'Tarjeta'}
+                    </Badge>
+                  </div>
                 </div>
               </div>
               <div>

@@ -87,15 +87,40 @@ export default function MyOrders() {
               </CardHeader>
               {expanded === order.id && (
                 <CardContent className="pb-4 pt-0">
-                  <div className="space-y-2 border-t pt-3">
-                    {(order.pedido_items || []).map((item, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">
-                          {item.productos?.nombre || `Producto #${item.id_producto}`} <span className="text-xs">x{item.cantidad}</span>
-                        </span>
-                        <span className="font-medium">S/{(Number(item.precio_unitario) * item.cantidad).toFixed(2)}</span>
+                  <div className="space-y-3 border-t pt-3">
+                    
+                    {/* 📍 NUEVO: Información de Envío y Pago */}
+                    <div className="grid gap-2 rounded-lg bg-zinc-50 p-3 text-xs dark:bg-zinc-900 sm:grid-cols-2">
+                      <div>
+                        <p className="font-semibold uppercase tracking-wider text-muted-foreground">Dirección de Envío</p>
+                        <p className="mt-0.5 font-medium">{order.direccion_envio || 'No especificada'}, {order.ciudad_envio || ''}</p>
+                        <p className="text-muted-foreground">Destinatario: {order.nombre_envio || 'Cliente'}</p>
                       </div>
-                    ))}
+                      <div>
+                        <p className="font-semibold uppercase tracking-wider text-muted-foreground">Método de Pago</p>
+                        <p className="mt-0.5 font-medium text-emerald-500 dark:text-emerald-400">
+                          {order.metodo_pago || 'Tarjeta'}
+                        </p>
+                        {order.telefono_envio && (
+                          <p className="text-muted-foreground">Teléfono: {order.telefono_envio}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Lista de productos (Tu código original) */}
+                    <div className="space-y-2 pt-1">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Productos</p>
+                      {(order.pedido_items || []).map((item, i) => (
+                        <div key={i} className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">
+                            {item.productos?.nombre || `Producto #${item.id_producto}`} <span className="text-xs font-medium">x{item.cantidad}</span>
+                          </span>
+                          <span className="font-medium">S/{(Number(item.precio_unitario) * item.cantidad).toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Fila del Total */}
                     <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold">
                       <span>Total</span>
                       <span>S/{Number(order.total).toFixed(2)}</span>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { jsPDF } from 'jspdf'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useCart } from '@/context/CartContext'
@@ -145,6 +146,7 @@ const stagger = {
 }
 
 export default function Checkout() {
+  
   const { items, totalPrice, clearCart } = useCart()
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -165,7 +167,118 @@ export default function Checkout() {
   })
   const [errors, setErrors] = useState({})
   const [showCVV, setShowCVV] = useState(false)
+  const generarComprobantePDF = (pedido, itemsComprados, metodo) => {
+  const doc = new jsPDF()
 
+  // Encabezado Estilizado
+  doc.setFont("Helvetica", "bold")
+  doc.setFontSize(22)
+  doc.text("VERODATA RETAIL", 14, 20)
+  
+  doc.setFontSize(10)
+  doc.setFont("Helvetica", "normal")
+  doc.text(`Código de Pedido: ${pedido.codigo}`, 14, 28)
+  doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 34)
+  doc.text(`Método de Pago: ${metodo}`, 14, 40)
+
+  // Información de Envío
+  doc.setFont("Helvetica", "bold")
+  doc.text("INFORMACIÓN DE ENVÍO", 14, 52)
+  doc.line(14, 54, 196, 54)
+  
+  doc.setFont("Helvetica", "normal")
+  doc.text(`Cliente: ${pedido.nombre_envio}`, 14, 60)
+  doc.text(`Dirección: ${pedido.direccion_envio}, ${pedido.ciudad_envio}`, 14, 66)
+  doc.text(`Teléfono: ${pedido.telefono_envio}`, 14, 72)
+
+  // Detalle de Productos
+  doc.setFont("Helvetica", "bold")
+  doc.text("DETALLE DE COMPRA", 14, 86)
+  doc.line(14, 88, 196, 88)
+
+  let y = 96
+  doc.setFontSize(9)
+  doc.text("Producto", 14, y)
+  doc.text("Cant.", 140, y)
+  doc.text("P. Unit.", 160, y)
+  doc.text("Subtotal", 180, y)
+  doc.line(14, y + 2, 196, y + 2)
+  
+  y += 10
+  doc.setFont("Helvetica", "normal")
+  itemsComprados.forEach((item) => {
+    doc.text(item.name.substring(0, 45), 14, y)
+    doc.text(`${item.quantity}`, 142, y)
+    doc.text(`S/ ${item.price.toFixed(2)}`, 160, y)
+    doc.text(`S/ ${(item.quantity * item.price).toFixed(2)}`, 180, y)
+    y += 8
+  })
+
+  // Total
+  doc.line(14, y, 196, y)
+  doc.setFont("Helvetica", "bold")
+  doc.setFontSize(12)
+  doc.text(`TOTAL PAGADO: S/ ${pedido.total.toFixed(2)}`, 135, y + 10)
+
+  // Guardar automáticamente
+  doc.save(`Comprobante-${pedido.codigo}.pdf`)
+}
+
+const handleSubmit = async (e) => {
+  e.preventDefault()
+  if (!validateForm()) return
+  setProcessing(true)
+  setError(null)
+
+  try {
+    const itemsPedido = items.map(item => ({
+      id_producto: item.id,
+      cantidad: item.quantity,
+      precio_unitario: item.price
+    }))
+
+    // Enviamos el metodo_pago al backend desde el inicio
+    const resPedido = await API.post('/pedidos', {
+      items: itemsPedido,
+      nombre_envio: form.nombre,
+      direccion_envio: form.direccion,
+      ciudad_envio: form.ciudad,
+      codigo_postal: form.codigoPostal,
+      telefono_envio: form.telefono,
+      metodo_pago: paymentMethod // <-- Enviado al backend
+    })
+
+    const pedidoCreado = resPedido.data
+
+    const datosPago = { telefono: form.telefono }
+    if (paymentMethod === 'Tarjeta') {
+      datosPago.numeroTarjeta = form.numeroTarjeta.replace(/\s/g, '')
+      datosPago.expiracion = form.expiracion
+      datosPago.cvv = form.cvv
+    }
+
+    const resPago = await API.post('/pagos/procesar', {
+      pedido_id: pedidoCreado.id,
+      metodo_pago: paymentMethod,
+      datos_pago: datosPago,
+    })
+
+    // 📄 DESCARGA AUTOMÁTICA DEL PDF
+    generarComprobantePDF(pedidoCreado, items, paymentMethod)
+
+    setTransaccionId(resPago.data.transaccion_id || pedidoCreado.codigo)
+    setCompleted(true)
+    clearCart()
+  } catch (err) {
+    console.error("Error procesando el flujo de compra:", err)
+    const errorData = err.response?.data?.error || { 
+      mensaje: err.response?.data?.mensaje || 'Error al procesar el pedido y pago.' 
+    }
+    setError(errorData)
+  } finally {
+    setProcessing(false)
+  }
+}
   function validateField(name, value) {
     switch (name) {
       case 'nombre':
@@ -202,17 +315,28 @@ export default function Checkout() {
     setErrors((prev) => ({ ...prev, [name]: err }))
   }
 
-  function validateForm() {
+function validateForm() {
     const newErrors = {}
+    
+    // Validaciones fijas para el envío
     if (!form.nombre.trim()) newErrors.nombre = 'Requerido'
     if (!form.direccion.trim()) newErrors.direccion = 'Requerido'
     if (!form.ciudad.trim()) newErrors.ciudad = 'Requerido'
     if (!form.codigoPostal.trim()) newErrors.codigoPostal = 'Requerido'
-    if (!form.telefono.trim()) newErrors.telefono = 'Requerido'
 
+    // 1️⃣ Validación del teléfono: SOLO es obligatoria si es Yape o Plin
+    if (paymentMethod === 'Yape' || paymentMethod === 'Plin') {
+      if (!form.telefono.trim()) {
+        newErrors.telefono = 'Requerido'
+      } else if (form.telefono.replace(/\D/g, '').length < 9) {
+        newErrors.telefono = 'Mínimo 9 dígitos'
+      }
+    }
+
+    // 2️⃣ Validación de Tarjeta: SOLO si el método es Tarjeta
     if (paymentMethod === 'Tarjeta') {
       if (!form.numeroTarjeta) newErrors.numeroTarjeta = 'Requerido'
-      else if (form.numeroTarjeta.length < 13) newErrors.numeroTarjeta = 'Número inválido'
+      else if (form.numeroTarjeta.replace(/\s/g, '').length < 13) newErrors.numeroTarjeta = 'Número inválido'
 
       if (!form.expiracion) newErrors.expiracion = 'Requerido'
       else if (form.expiracion.length < 4) newErrors.expiracion = 'Fecha inválida'
@@ -231,44 +355,12 @@ export default function Checkout() {
       else if (form.cvv.length < 3) newErrors.cvv = 'CVV inválido'
     }
 
-    if (paymentMethod === 'Yape' || paymentMethod === 'Plin') {
-      if (form.telefono.length < 9) newErrors.telefono = 'Mínimo 9 dígitos'
-    }
+    // 3️⃣ Para PagoEfectivo o Transferencia no bloqueamos nada, pasan directo si los campos de envío están llenos
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!validateForm()) return
-    setProcessing(true)
-    setError(null)
-
-    try {
-      const datosPago = { telefono: form.telefono }
-      if (paymentMethod === 'Tarjeta') {
-        datosPago.numeroTarjeta = form.numeroTarjeta.replace(/\s/g, '')
-        datosPago.expiracion = form.expiracion
-        datosPago.cvv = form.cvv
-      }
-
-      const res = await API.post('/pagos/procesar', {
-        pedido_id: 1,
-        metodo_pago: paymentMethod,
-        datos_pago: datosPago,
-      })
-
-      setTransaccionId(res.data.transaccion_id)
-      setCompleted(true)
-      clearCart()
-    } catch (err) {
-      const errorData = err.response?.data?.error || { mensaje: 'Error al procesar el pago.' }
-      setError(errorData)
-    } finally {
-      setProcessing(false)
-    }
-  }
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
 
