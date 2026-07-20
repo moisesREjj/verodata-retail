@@ -13,8 +13,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog'
 import API from '@/lib/api'
-import { Search, RefreshCw, Eye, ClipboardList } from 'lucide-react'
+import { Search, RefreshCw, Eye, FileText, Download } from 'lucide-react'
 import { ESTADOS_PEDIDO } from '@/types'
+import { generarComprobantePDF } from '@/lib/pdfGenerator'
 
 export default function AdminOrders() {
   const [orders, setOrders] = useState([])
@@ -49,6 +50,32 @@ export default function AdminOrders() {
   const openDetail = (order) => {
     setSelectedOrder(order)
     setDetailOpen(true)
+  }
+
+  // 📄 Función para generar/descargar PDF desde la vista de Admin
+  const handleDownloadPDF = (order) => {
+    const itemsPDF = (order.pedido_items || []).map((item) => ({
+      name: item.productos?.nombre || `Producto #${item.id_producto}`,
+      quantity: item.cantidad,
+      price: Number(item.precio_unitario),
+    }))
+
+    const pedidoData = {
+      id: order.id,
+      codigo: order.codigo,
+      total: Number(order.total),
+      nombre_envio: order.nombre_envio || order.usuarios?.nombre,
+      direccion_envio: order.direccion_envio,
+      ciudad_envio: order.ciudad_envio,
+      codigo_postal: order.codigo_postal,
+      telefono_envio: order.telefono_envio,
+      fecha: order.created_at || order.fecha,
+    }
+
+    const emailCliente = order.email_envio || order.usuarios?.email || ''
+    const metodoPago = order.metodo_pago || 'Tarjeta'
+
+    generarComprobantePDF(pedidoData, itemsPDF, metodoPago, emailCliente)
   }
 
   const filtered = orders.filter((o) => {
@@ -144,10 +171,21 @@ export default function AdminOrders() {
                         {o.pedido_items?.length || 0}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openDetail(o)}>
+                        <div className="flex justify-end gap-2 items-center">
+                          {/* 📄 Botón rápido para descargar PDF en la tabla */}
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            title="Descargar Comprobante PDF"
+                            onClick={() => handleDownloadPDF(o)}
+                          >
+                            <FileText className="h-4 w-4 text-primary" />
+                          </Button>
+
+                          <Button variant="ghost" size="icon" title="Ver Detalle" onClick={() => openDetail(o)}>
                             <Eye className="h-4 w-4" />
                           </Button>
+
                           <Select
                             value={o.estado}
                             onValueChange={(v) => handleStatusChange(o.id, v)}
@@ -198,7 +236,7 @@ export default function AdminOrders() {
                   <p className="text-muted-foreground">{selectedOrder.direccion_envio || '-'}</p>
                   {selectedOrder.ciudad_envio && <p className="text-muted-foreground">{selectedOrder.ciudad_envio}</p>}
                   
-                  {/* 💳 NUEVO: Método de Pago en el Panel del Admin */}
+                  {/* 💳 Método de Pago */}
                   <div className="mt-2 pt-2 border-t border-border/40">
                     <p className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Método de Pago</p>
                     <Badge variant="outline" className="mt-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/10 dark:text-emerald-400">
@@ -207,6 +245,7 @@ export default function AdminOrders() {
                   </div>
                 </div>
               </div>
+
               <div>
                 <p className="text-sm font-medium mb-2">Productos</p>
                 <Table>
@@ -232,8 +271,23 @@ export default function AdminOrders() {
                   </TableBody>
                 </Table>
               </div>
-              <div className="text-right text-lg font-bold">
-                Total: S/ {Number(selectedOrder.total).toFixed(2)}
+
+              {/* Fila del Total y Botón de Descarga dentro del Modal */}
+              <div className="flex items-center justify-between border-t border-border/40 pt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDownloadPDF(selectedOrder)}
+                  className="flex items-center gap-2 text-xs font-medium"
+                >
+                  <FileText className="h-4 w-4 text-primary" />
+                  <Download className="h-3.5 w-3.5" />
+                  Descargar Comprobante PDF
+                </Button>
+
+                <div className="text-lg font-bold">
+                  Total: S/ {Number(selectedOrder.total).toFixed(2)}
+                </div>
               </div>
             </div>
           )}

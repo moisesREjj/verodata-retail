@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Package, ChevronDown, ChevronUp } from 'lucide-react'
+import { Package, ChevronDown, ChevronUp, Download, FileText } from 'lucide-react'
 import API from '@/lib/api'
+import { generarComprobantePDF } from '@/lib/pdfGenerator'
 
 const statusColors = {
   Pagado: 'success',
@@ -28,10 +29,38 @@ export default function MyOrders() {
     setExpanded(expanded === id ? null : id)
   }
 
+  // 📄 Función para volver a descargar el PDF desde el historial
+  const handleDownloadPDF = (order) => {
+    // Mapeamos los items del pedido al formato que consume el PDF
+    const itemsPDF = (order.pedido_items || []).map((item) => ({
+      name: item.productos?.nombre || `Producto #${item.id_producto}`,
+      quantity: item.cantidad,
+      price: Number(item.precio_unitario),
+    }))
+
+    // Estructuramos el objeto del pedido
+    const pedidoData = {
+      id: order.id,
+      codigo: order.codigo,
+      total: Number(order.total),
+      nombre_envio: order.nombre_envio,
+      direccion_envio: order.direccion_envio,
+      ciudad_envio: order.ciudad_envio,
+      codigo_postal: order.codigo_postal,
+      telefono_envio: order.telefono_envio,
+      fecha: order.fecha || order.created_at,
+    }
+
+    const emailCliente = order.email_envio || order.email || ''
+    const metodoPago = order.metodo_pago || 'Tarjeta'
+
+    generarComprobantePDF(pedidoData, itemsPDF, metodoPago, emailCliente)
+  }
+
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <div className="flex items-center justify-center h-64">
+        <div className="flex h-64 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       </div>
@@ -85,11 +114,12 @@ export default function MyOrders() {
                   </div>
                 </div>
               </CardHeader>
+
               {expanded === order.id && (
                 <CardContent className="pb-4 pt-0">
                   <div className="space-y-3 border-t pt-3">
                     
-                    {/* 📍 NUEVO: Información de Envío y Pago */}
+                    {/* 📍 Información de Envío y Pago */}
                     <div className="grid gap-2 rounded-lg bg-zinc-50 p-3 text-xs dark:bg-zinc-900 sm:grid-cols-2">
                       <div>
                         <p className="font-semibold uppercase tracking-wider text-muted-foreground">Dirección de Envío</p>
@@ -107,7 +137,7 @@ export default function MyOrders() {
                       </div>
                     </div>
 
-                    {/* Lista de productos (Tu código original) */}
+                    {/* Lista de productos */}
                     <div className="space-y-2 pt-1">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Productos</p>
                       {(order.pedido_items || []).map((item, i) => (
@@ -125,6 +155,24 @@ export default function MyOrders() {
                       <span>Total</span>
                       <span>S/{Number(order.total).toFixed(2)}</span>
                     </div>
+
+                    {/* 📄 NUEVO: Botón para Descargar Comprobante PDF */}
+                    <div className="flex justify-end pt-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDownloadPDF(order)
+                        }}
+                        className="flex items-center gap-2 text-xs font-medium"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-primary" />
+                        <Download className="h-3 w-3" />
+                        Descargar Comprobante PDF
+                      </Button>
+                    </div>
+
                   </div>
                 </CardContent>
               )}

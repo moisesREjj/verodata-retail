@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { jsPDF } from 'jspdf'
+import { generarComprobantePDF } from '@/lib/pdfGenerator'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useCart } from '@/context/CartContext'
@@ -155,7 +155,7 @@ export default function Checkout() {
   const [completed, setCompleted] = useState(false)
   const [error, setError] = useState(null)
   const [transaccionId, setTransaccionId] = useState(null)
-  const [form, setForm] = useState({
+ const [form, setForm] = useState({
     nombre: '',
     direccion: '',
     ciudad: '',
@@ -164,65 +164,11 @@ export default function Checkout() {
     numeroTarjeta: '',
     expiracion: '',
     cvv: '',
+    email: '', // 👈 Añadimos solo esta línea
   })
   const [errors, setErrors] = useState({})
   const [showCVV, setShowCVV] = useState(false)
-  const generarComprobantePDF = (pedido, itemsComprados, metodo) => {
-  const doc = new jsPDF()
-
-  // Encabezado Estilizado
-  doc.setFont("Helvetica", "bold")
-  doc.setFontSize(22)
-  doc.text("VERODATA RETAIL", 14, 20)
   
-  doc.setFontSize(10)
-  doc.setFont("Helvetica", "normal")
-  doc.text(`Código de Pedido: ${pedido.codigo}`, 14, 28)
-  doc.text(`Fecha: ${new Date().toLocaleDateString()}`, 14, 34)
-  doc.text(`Método de Pago: ${metodo}`, 14, 40)
-
-  // Información de Envío
-  doc.setFont("Helvetica", "bold")
-  doc.text("INFORMACIÓN DE ENVÍO", 14, 52)
-  doc.line(14, 54, 196, 54)
-  
-  doc.setFont("Helvetica", "normal")
-  doc.text(`Cliente: ${pedido.nombre_envio}`, 14, 60)
-  doc.text(`Dirección: ${pedido.direccion_envio}, ${pedido.ciudad_envio}`, 14, 66)
-  doc.text(`Teléfono: ${pedido.telefono_envio}`, 14, 72)
-
-  // Detalle de Productos
-  doc.setFont("Helvetica", "bold")
-  doc.text("DETALLE DE COMPRA", 14, 86)
-  doc.line(14, 88, 196, 88)
-
-  let y = 96
-  doc.setFontSize(9)
-  doc.text("Producto", 14, y)
-  doc.text("Cant.", 140, y)
-  doc.text("P. Unit.", 160, y)
-  doc.text("Subtotal", 180, y)
-  doc.line(14, y + 2, 196, y + 2)
-  
-  y += 10
-  doc.setFont("Helvetica", "normal")
-  itemsComprados.forEach((item) => {
-    doc.text(item.name.substring(0, 45), 14, y)
-    doc.text(`${item.quantity}`, 142, y)
-    doc.text(`S/ ${item.price.toFixed(2)}`, 160, y)
-    doc.text(`S/ ${(item.quantity * item.price).toFixed(2)}`, 180, y)
-    y += 8
-  })
-
-  // Total
-  doc.line(14, y, 196, y)
-  doc.setFont("Helvetica", "bold")
-  doc.setFontSize(12)
-  doc.text(`TOTAL PAGADO: S/ ${pedido.total.toFixed(2)}`, 135, y + 10)
-
-  // Guardar automáticamente
-  doc.save(`Comprobante-${pedido.codigo}.pdf`)
-}
 
 const handleSubmit = async (e) => {
   e.preventDefault()
@@ -237,7 +183,7 @@ const handleSubmit = async (e) => {
       precio_unitario: item.price
     }))
 
-    // Enviamos el metodo_pago al backend desde el inicio
+    // 1️⃣ Creamos el pedido (esto es lo que ya se está guardando en tu Base de Datos)
     const resPedido = await API.post('/pedidos', {
       items: itemsPedido,
       nombre_envio: form.nombre,
@@ -245,26 +191,30 @@ const handleSubmit = async (e) => {
       ciudad_envio: form.ciudad,
       codigo_postal: form.codigoPostal,
       telefono_envio: form.telefono,
-      metodo_pago: paymentMethod // <-- Enviado al backend
+      metodo_pago: paymentMethod
     })
 
     const pedidoCreado = resPedido.data
 
+    // 2️⃣ Preparamos los datos del pago de forma dinámica según lo que el usuario llene
     const datosPago = { telefono: form.telefono }
+    
+    // Solo si el cliente elige Tarjeta, extraemos lo que haya escrito dinámicamente en el formulario
     if (paymentMethod === 'Tarjeta') {
-      datosPago.numeroTarjeta = form.numeroTarjeta.replace(/\s/g, '')
-      datosPago.expiracion = form.expiracion
-      datosPago.cvv = form.cvv
+      datosPago.numeroTarjeta = form.numeroTarjeta ? form.numeroTarjeta.replace(/\s/g, '') : ''
+      datosPago.expiracion = form.expiracion || ''
+      datosPago.cvv = form.cvv || ''
     }
 
+    // 3️⃣ Procesamos el pago en el backend
     const resPago = await API.post('/pagos/procesar', {
       pedido_id: pedidoCreado.id,
       metodo_pago: paymentMethod,
       datos_pago: datosPago,
     })
 
-    // 📄 DESCARGA AUTOMÁTICA DEL PDF
-    generarComprobantePDF(pedidoCreado, items, paymentMethod)
+    // 📄 Si el pago del backend responde con éxito, lanzamos el PDF con el email dinámico del formulario
+    generarComprobantePDF(pedidoCreado, items, paymentMethod, form.email)
 
     setTransaccionId(resPago.data.transaccion_id || pedidoCreado.codigo)
     setCompleted(true)
@@ -291,6 +241,8 @@ const handleSubmit = async (e) => {
         return /^\d{0,10}$/.test(value) ? '' : 'Solo números'
       case 'telefono':
         return /^\d{0,15}$/.test(value) ? '' : 'Solo números'
+      case 'email':
+        return /\S+@\S+\.\S+/.test(value) ? '' : 'Correo inválido'
       case 'numeroTarjeta':
         return /^\d*$/.test(value) ? '' : 'Solo números'
       case 'expiracion':
@@ -310,6 +262,7 @@ const handleSubmit = async (e) => {
     if (['nombre', 'ciudad'].includes(name)) {
       clean = value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, '')
     }
+    
     update(name, clean)
     const err = validateField(name, clean)
     setErrors((prev) => ({ ...prev, [name]: err }))
@@ -318,22 +271,27 @@ const handleSubmit = async (e) => {
 function validateForm() {
     const newErrors = {}
     
-    // Validaciones fijas para el envío
+    // Validaciones fijas para el envío (Obligatorias siempre)
     if (!form.nombre.trim()) newErrors.nombre = 'Requerido'
     if (!form.direccion.trim()) newErrors.direccion = 'Requerido'
     if (!form.ciudad.trim()) newErrors.ciudad = 'Requerido'
     if (!form.codigoPostal.trim()) newErrors.codigoPostal = 'Requerido'
 
-    // 1️⃣ Validación del teléfono: SOLO es obligatoria si es Yape o Plin
-    if (paymentMethod === 'Yape' || paymentMethod === 'Plin') {
-      if (!form.telefono.trim()) {
-        newErrors.telefono = 'Requerido'
-      } else if (form.telefono.replace(/\D/g, '').length < 9) {
-        newErrors.telefono = 'Mínimo 9 dígitos'
-      }
+    // 📞 Validación fija del teléfono: Ahora es OBLIGATORIA para cualquier método de pago
+    if (!form.telefono.trim()) {
+      newErrors.telefono = 'Requerido'
+    } else if (form.telefono.replace(/\D/g, '').length < 9) {
+      newErrors.telefono = 'Mínimo 9 dígitos'
     }
 
-    // 2️⃣ Validación de Tarjeta: SOLO si el método es Tarjeta
+    // ✉️ Validación fija del correo: OBLIGATORIA para cualquier método de pago
+    if (!form.email.trim()) {
+      newErrors.email = 'Requerido'
+    } else if (!/\S+@\S+\.\S+/.test(form.email)) {
+      newErrors.email = 'Correo inválido'
+    }
+
+    // 💳 Validación de Tarjeta: SOLO si el método es Tarjeta
     if (paymentMethod === 'Tarjeta') {
       if (!form.numeroTarjeta) newErrors.numeroTarjeta = 'Requerido'
       else if (form.numeroTarjeta.replace(/\s/g, '').length < 13) newErrors.numeroTarjeta = 'Número inválido'
@@ -354,13 +312,9 @@ function validateForm() {
       if (!form.cvv) newErrors.cvv = 'Requerido'
       else if (form.cvv.length < 3) newErrors.cvv = 'CVV inválido'
     }
-
-    // 3️⃣ Para PagoEfectivo o Transferencia no bloqueamos nada, pasan directo si los campos de envío están llenos
-
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
-
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
 
@@ -553,6 +507,38 @@ function validateForm() {
                         {errors.codigoPostal && <p className="mt-1 text-xs text-red-400">{errors.codigoPostal}</p>}
                       </div>
                     </div>
+
+                    {/* 📞 Nueva fila para Teléfono y Correo Corregida */}
+                    <div className="grid gap-4 sm:grid-cols-2 pt-2">
+                      <div>
+                        <label htmlFor="telefono" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Teléfono de Contacto *
+                        </label>
+                        <Input 
+                          id="telefono"
+                          placeholder="Ej: 912345678" 
+                          value={form.telefono} 
+                          onChange={(e) => handleChange('telefono', e.target.value)} 
+                          className={`h-11 rounded-lg ${errors.telefono ? 'border-red-500' : 'border-border/50'}`}
+                        />
+                        {errors.telefono && <p className="mt-1 text-xs text-red-400">{errors.telefono}</p>}
+                      </div>
+                      <div>
+                        <label htmlFor="email" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                          Correo Electrónico *
+                        </label>
+                        <Input 
+                          id="email"
+                          type="email"
+                          placeholder="Ej: cliente@correo.com" 
+                          value={form.email} 
+                          onChange={(e) => handleChange('email', e.target.value)} 
+                          className={`h-11 rounded-lg ${errors.email ? 'border-red-500' : 'border-border/50'}`}
+                        />
+                        {errors.email && <p className="mt-1 text-xs text-red-400">{errors.email}</p>}
+                      </div>
+                    </div>
+
                   </div>
                 </CardContent>
               </Card>
@@ -599,22 +585,6 @@ function validateForm() {
                       )
                     })}
                   </div>
-
-                  {(paymentMethod === 'Yape' || paymentMethod === 'Plin') && (
-                    <div className="mt-4">
-                      <label htmlFor="telefono" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                        N&uacute;mero de Tel&eacute;fono
-                      </label>
-                      <Input
-                        id="telefono"
-                        value={form.telefono}
-                        onChange={(e) => handleChange('telefono', e.target.value)}
-                        placeholder="Ej: 987654321"
-                        className={`h-11 rounded-lg font-mono ${errors.telefono ? 'border-red-500' : 'border-border/50'}`}
-                      />
-                      {errors.telefono && <p className="mt-1 text-xs text-red-400">{errors.telefono}</p>}
-                    </div>
-                  )}
 
                   {paymentMethod === 'Tarjeta' && (
                     <div className="mt-4 space-y-4">
