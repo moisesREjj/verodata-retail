@@ -1,9 +1,9 @@
 import axios from 'axios'
 
 // 🟢 Definimos la URL base correcta usando variables de entorno o producción
-const BASE_URL = 'http://localhost:3001/api'
-// (Esta es la línea que tenías antes, la dejamos comentada para no perderla):
-// const BASE_URL = import.meta.env.VITE_API_URL || 'https://verodata-backend.onrender.com/api'
+//const BASE_URL = 'http://localhost:3001/api'
+//(Esta es la línea que tenías antes, la dejamos comentada para no perderla):
+const BASE_URL = import.meta.env.VITE_API_URL || 'https://verodata-backend.onrender.com/api'
 const client = axios.create({
   baseURL: BASE_URL,
   timeout: 10000,
