@@ -29,7 +29,6 @@ const colorWays = [
 const discountTable = [0, 15, 20, 25, 30, 40]
 
 function enrichProduct(p) {
-  const slug = p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')
   const isNew = p.stock > 4
   const discountIdx = p.id % discountTable.length
   const discount = p.stock <= 3 ? discountTable[discountIdx] : 0
@@ -37,13 +36,17 @@ function enrichProduct(p) {
   const variantCount = 2 + (p.id % 2)
   const startIdx = ((p.id - 1) * 2) % colorWays.length
 
+  // 🖼️ EXTRAEMOS LA IMAGEN REAL DE LA BASE DE DATOS / API
+  const realImage = p.imagen_url || p.image || p.imagen || `https://placehold.co/600x600/1a1a1a/ffffff?text=${encodeURIComponent(p.name)}`
+
   const variants = Array.from({ length: variantCount }, (_, i) => {
     const cw = colorWays[(startIdx + i) % colorWays.length]
     return {
       ...cw,
-      frontImage: `https://picsum.photos/seed/${slug}-${cw.color}-front/600/600`,
-      backImage: `https://picsum.photos/seed/${slug}-${cw.color}-back/600/600`,
-      thumbnail: `https://picsum.photos/seed/${slug}-${cw.color}-thumb/60/60`,
+      // Usamos la imagen real tanto para frente como reverso para no romper la galería
+      frontImage: realImage,
+      backImage: realImage,
+      thumbnail: realImage,
     }
   })
 
@@ -52,7 +55,7 @@ function enrichProduct(p) {
     isNew,
     discount,
     originalPrice: originalPrice ? Math.round(originalPrice * 100) / 100 : null,
-    description: descriptionMap[p.category] || 'Producto premium',
+    description: p.description || descriptionMap[p.category] || 'Producto premium',
     variants,
   }
 }
@@ -158,7 +161,7 @@ function ProductCard({ product, onAdd }) {
 
           <div className="mt-auto flex items-baseline gap-2 pt-3">
             <span className="text-lg font-bold tracking-tight">
-              S/{product.price.toFixed(2)}
+              S/{Number(product.price).toFixed(2)}
             </span>
             {product.originalPrice && (
               <span className="text-sm text-muted-foreground line-through">
@@ -183,7 +186,7 @@ function ProductCard({ product, onAdd }) {
 /* ─── MAIN CATALOG ─── */
 
 export default function Catalog() {
-  const { products, addItem } = useOutletContext()
+  const { products = [], addItem } = useOutletContext()
   const [searchTerm, setSearchTerm] = useState('')
   const [category, setCategory] = useState('Todas')
   const [viewMode, setViewMode] = useState('grid')
@@ -203,7 +206,7 @@ export default function Catalog() {
       <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
         <Package className="mb-4 h-16 w-16" />
         <p className="text-lg font-medium">No se encontraron productos</p>
-        <p className="text-sm">Intenta con otros t&eacute;rminos de b&uacute;squeda o categor&iacute;a.</p>
+        <p className="text-sm">Intenta con otros términos de búsqueda o categoría.</p>
       </div>
     )
   }
@@ -214,7 +217,7 @@ export default function Catalog() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-['Oswald',sans-serif] text-3xl font-black uppercase tracking-tighter sm:text-4xl">
-            Cat&aacute;logo
+            Catálogo
           </h1>
           <p className="mt-1 text-sm font-light text-muted-foreground">
             {filtered.length} producto{filtered.length !== 1 ? 's' : ''} encontrado{filtered.length !== 1 ? 's' : ''}
@@ -271,7 +274,7 @@ export default function Catalog() {
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <Package className="mb-4 h-16 w-16" />
           <p className="text-lg font-medium">No se encontraron productos</p>
-          <p className="text-sm">Intenta con otros t&eacute;rminos de b&uacute;squeda o categor&iacute;a.</p>
+          <p className="text-sm">Intenta con otros términos de búsqueda o categoría.</p>
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -307,7 +310,7 @@ export default function Catalog() {
                   <h3 className="font-semibold leading-tight">{product.name}</h3>
                   <p className="text-xs font-light text-muted-foreground">{product.description}</p>
                   <div className="mt-1 flex items-baseline gap-2">
-                    <span className="font-bold tracking-tight">S/{product.price.toFixed(2)}</span>
+                    <span className="font-bold tracking-tight">S/{Number(product.price).toFixed(2)}</span>
                     {product.originalPrice && (
                       <span className="text-xs text-muted-foreground line-through">
                         S/{product.originalPrice.toFixed(2)}
