@@ -18,15 +18,25 @@ export function CartProvider({ children }) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
   }, [items])
 
-  const addItem = (product) => {
+  /* 
+    ✅ FUNCIÓN CORREGIDA:
+    Acepta que el producto traiga un `quantity` propio (ej. 12, 100, 1000) 
+    o un segundo argumento opcional `quantityToAdd`.
+  */
+  const addItem = (product, quantityToAdd = null) => {
+    // Si viene la cantidad en product.quantity o en quantityToAdd, la usamos; de lo contrario 1
+    const qty = quantityToAdd ?? product.quantity ?? 1
+
     setItems((prev) => {
       const existing = prev.find((item) => item.id === product.id)
       if (existing) {
         return prev.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + qty }
+            : item
         )
       }
-      return [...prev, { ...product, quantity: 1 }]
+      return [...prev, { ...product, quantity: qty }]
     })
   }
 

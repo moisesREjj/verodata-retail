@@ -36,14 +36,16 @@ function enrichProduct(p) {
   const variantCount = 2 + (p.id % 2)
   const startIdx = ((p.id - 1) * 2) % colorWays.length
 
-  // 🖼️ EXTRAEMOS LA IMAGEN REAL DE LA BASE DE DATOS / API
-  const realImage = p.imagen_url || p.image || p.imagen || `https://placehold.co/600x600/1a1a1a/ffffff?text=${encodeURIComponent(p.name)}`
+  const realImage =
+    p.imagen_url ||
+    p.image ||
+    p.imagen ||
+    `https://placehold.co/600x600/1a1a1a/ffffff?text=${encodeURIComponent(p.name)}`
 
   const variants = Array.from({ length: variantCount }, (_, i) => {
     const cw = colorWays[(startIdx + i) % colorWays.length]
     return {
       ...cw,
-      // Usamos la imagen real tanto para frente como reverso para no romper la galería
       frontImage: realImage,
       backImage: realImage,
       thumbnail: realImage,
@@ -66,7 +68,7 @@ function imgFallback(e, label) {
   e.target.src = `https://placehold.co/600x600/1a1a1a/ffffff?text=${encodeURIComponent(label)}`
 }
 
-/* ─── PRODUCT CARD (maneja su propio hover / variante) ─── */
+/* ─── PRODUCT CARD ─── */
 
 function ProductCard({ product, onAdd }) {
   const [isHovered, setIsHovered] = useState(false)
@@ -74,20 +76,21 @@ function ProductCard({ product, onAdd }) {
   const [selVar, setSelVar] = useState(0)
   const current = product.variants[selVar]
 
-  const label = product.discount > 0
-    ? { text: `-${product.discount}%`, variant: 'destructive' }
-    : product.isNew
+  const label =
+    product.discount > 0
+      ? { text: `-${product.discount}%`, variant: 'destructive' }
+      : product.isNew
       ? { text: 'JUST IN', variant: 'default' }
       : product.stock <= 3
-        ? { text: `STOCK ${product.stock}`, variant: 'secondary' }
-        : null
+      ? { text: `STOCK ${product.stock}`, variant: 'secondary' }
+      : null
 
   return (
     <motion.div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <Card className="flex h-full flex-col overflow-hidden border-border/40 bg-card transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+      <Card className="flex h-full flex-col overflow-hidden border-border/40 bg-card transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
         {/* ── IMAGE CONTAINER ── */}
         <div className="relative aspect-[1/1] overflow-hidden bg-zinc-50 dark:bg-zinc-900">
           <AnimatePresence mode="wait">
@@ -106,12 +109,18 @@ function ProductCard({ product, onAdd }) {
 
           {/* Heart (favoritos) */}
           <button
-            onClick={(e) => { e.stopPropagation(); setIsFav((v) => !v) }}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsFav((v) => !v)
+            }}
             className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-white/70 shadow-sm backdrop-blur-sm transition-all hover:scale-110 dark:bg-black/50"
             aria-label="Favoritos"
           >
             <Heart
-              className={`h-4 w-4 transition-colors ${isFav ? 'fill-red-500 text-red-500' : 'text-zinc-700 dark:text-zinc-300'}`}
+              className={`h-4 w-4 transition-colors ${
+                isFav ? 'fill-red-500 text-red-500' : 'text-zinc-700 dark:text-zinc-300'
+              }`}
             />
           </button>
 
@@ -130,10 +139,16 @@ function ProductCard({ product, onAdd }) {
             <div className="absolute bottom-3 left-3 flex gap-1.5">
               {product.variants.map((v, i) => (
                 <button
+                  type="button"
                   key={v.color}
-                  onClick={(e) => { e.stopPropagation(); setSelVar(i) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelVar(i)
+                  }}
                   className={`overflow-hidden rounded-full border-2 transition-all ${
-                    i === selVar ? 'scale-110 border-black dark:border-white' : 'border-white/70 dark:border-zinc-700'
+                    i === selVar
+                      ? 'scale-110 border-black dark:border-white'
+                      : 'border-white/70 dark:border-zinc-700'
                   }`}
                   aria-label={v.color}
                 >
@@ -141,7 +156,9 @@ function ProductCard({ product, onAdd }) {
                     src={v.thumbnail}
                     alt={v.color}
                     className="h-6 w-6 object-cover"
-                    onError={(e) => { e.target.style.display = 'none' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none'
+                    }}
                   />
                 </button>
               ))}
@@ -149,9 +166,49 @@ function ProductCard({ product, onAdd }) {
           )}
         </div>
 
+        {/* ── BOTONES DE VOLUMEN RÁPIDO (PASO 2) ── */}
+        <div className="mt-2 flex flex-wrap justify-center gap-1 px-2 pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 border-emerald-500/30 px-2 text-[10px] font-semibold text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-500"
+            onClick={(e) => {
+              e.stopPropagation()
+              onAdd({ ...product, quantity: 12 })
+            }}
+          >
+            +12 (Docena -15%)
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 border-emerald-500/30 px-2 text-[10px] font-semibold text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-500"
+            onClick={(e) => {
+              e.stopPropagation()
+              onAdd({ ...product, quantity: 100 })
+            }}
+          >
+            +100 (Centenar -20%)
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-6 border-emerald-500/30 px-2 text-[10px] font-semibold text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-500"
+            onClick={(e) => {
+              e.stopPropagation()
+              onAdd({ ...product, quantity: 1000 })
+            }}
+          >
+            +1000 (Millar -30%)
+          </Button>
+        </div>
+
         {/* ── PRODUCT INFO ── */}
         <CardContent className="flex flex-1 flex-col p-4">
-          <p className="text-[10px] font-medium tracking-[0.2em] text-muted-foreground uppercase">
+          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
             {product.category}
           </p>
           <h3 className="mt-0.5 font-semibold leading-tight">{product.name}</h3>
@@ -171,11 +228,15 @@ function ProductCard({ product, onAdd }) {
           </div>
 
           <Button
+            type="button"
             className="mt-3 w-full gap-1.5 rounded-full text-xs font-semibold"
             size="sm"
-            onClick={() => onAdd(product)}
+            onClick={(e) => {
+              e.stopPropagation()
+              onAdd(product)
+            }}
           >
-            <ShoppingCart className="h-3.5 w-3.5" /> Agregar
+            <ShoppingCart className="h-3.5 w-3.5" /> Agregar 1
           </Button>
         </CardContent>
       </Card>
@@ -235,15 +296,25 @@ export default function Catalog() {
           </div>
           <div className="hidden rounded-lg border border-border/50 p-0.5 sm:flex">
             <button
+              type="button"
               onClick={() => setViewMode('grid')}
-              className={`rounded-md p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`rounded-md p-1.5 transition-colors ${
+                viewMode === 'grid'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
               aria-label="Vista cuadrícula"
             >
               <Grid3X3 className="h-4 w-4" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('list')}
-              className={`rounded-md p-1.5 transition-colors ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`rounded-md p-1.5 transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
               aria-label="Vista lista"
             >
               <List className="h-4 w-4" />
@@ -256,9 +327,10 @@ export default function Catalog() {
       <div className="mb-6 flex flex-wrap gap-2">
         {categories.map((cat) => (
           <button
+            type="button"
             key={cat}
             onClick={() => setCategory(cat)}
-            className={`rounded-full px-4 py-1.5 text-xs font-medium tracking-wide uppercase transition-colors ${
+            className={`rounded-full px-4 py-1.5 text-xs font-medium uppercase tracking-wide transition-colors ${
               category === cat
                 ? 'bg-black text-white dark:bg-white dark:text-black'
                 : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
@@ -287,9 +359,9 @@ export default function Catalog() {
           {filtered.map((product) => (
             <div
               key={product.id}
-              className="group flex items-center gap-5 rounded-2xl border border-border/50 p-4 transition-all hover:shadow-md"
+              className="group flex flex-col items-start gap-5 rounded-2xl border border-border/50 p-4 transition-all hover:shadow-md sm:flex-row sm:items-center"
             >
-              <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-zinc-50 sm:h-28 sm:w-28 dark:bg-zinc-900">
+              <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-zinc-50 dark:bg-zinc-900 sm:h-28 sm:w-28">
                 <img
                   src={product.variants[0].frontImage}
                   alt={product.name}
@@ -297,20 +369,22 @@ export default function Catalog() {
                   onError={(e) => imgFallback(e, product.name)}
                 />
                 {product.discount > 0 && (
-                  <span className="absolute left-1.5 top-1.5 rounded-sm bg-destructive px-1.5 py-0.5 text-[9px] font-bold text-destructive-foreground uppercase tracking-wider">
+                  <span className="absolute left-1.5 top-1.5 rounded-sm bg-destructive px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-destructive-foreground">
                     -{product.discount}%
                   </span>
                 )}
               </div>
               <div className="flex flex-1 flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-[10px] font-medium tracking-[0.2em] text-muted-foreground uppercase">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">
                     {product.category}
                   </p>
                   <h3 className="font-semibold leading-tight">{product.name}</h3>
                   <p className="text-xs font-light text-muted-foreground">{product.description}</p>
                   <div className="mt-1 flex items-baseline gap-2">
-                    <span className="font-bold tracking-tight">S/{Number(product.price).toFixed(2)}</span>
+                    <span className="font-bold tracking-tight">
+                      S/{Number(product.price).toFixed(2)}
+                    </span>
                     {product.originalPrice && (
                       <span className="text-xs text-muted-foreground line-through">
                         S/{product.originalPrice.toFixed(2)}
@@ -318,13 +392,35 @@ export default function Catalog() {
                     )}
                   </div>
                 </div>
-                <Button
-                  className="mt-3 w-full rounded-full sm:mt-0 sm:w-auto sm:px-6"
-                  size="sm"
-                  onClick={() => addItem(product)}
-                >
-                  <ShoppingCart className="mr-1.5 h-4 w-4" /> Agregar
-                </Button>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2 sm:mt-0">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs font-semibold hover:bg-emerald-500/10 hover:text-emerald-500"
+                    onClick={() => addItem({ ...product, quantity: 12 })}
+                  >
+                    +12 (-15%)
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs font-semibold hover:bg-emerald-500/10 hover:text-emerald-500"
+                    onClick={() => addItem({ ...product, quantity: 100 })}
+                  >
+                    +100 (-20%)
+                  </Button>
+                  <Button
+                    type="button"
+                    className="rounded-full px-4"
+                    size="sm"
+                    onClick={() => addItem(product)}
+                  >
+                    <ShoppingCart className="mr-1.5 h-4 w-4" /> Agregar
+                  </Button>
+                </div>
               </div>
             </div>
           ))}

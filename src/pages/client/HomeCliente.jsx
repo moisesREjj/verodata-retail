@@ -5,10 +5,10 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
-  Truck, ShieldCheck, Headphones, ShoppingCart, ArrowRight,
+  Truck, ShieldCheck, Headphones, ShoppingCart, ArrowRight, Percent, Tag, Zap
 } from 'lucide-react'
 
-/* ─── UNSLPASH IMAGES ─── */
+/* ─── UNSPLASH IMAGES ─── */
 const heroImages = [
   'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1600&q=80',
   'https://images.unsplash.com/photo-1606107557195-0e29a4b5b4aa?w=1600&q=80',
@@ -78,7 +78,7 @@ function imgFallback(e, label) {
 }
 
 export default function HomeCliente() {
-  const { products, addItem } = useOutletContext()
+  const { products = [], addItem } = useOutletContext()
   const navigate = useNavigate()
   const [imgIndex, setImgIndex] = useState(0)
   const [dir, setDir] = useState(1)
@@ -224,7 +224,59 @@ export default function HomeCliente() {
       </section>
 
       {/* ════════════════════════════════════════════════════════════
-          3.  COPY EMOCIONAL  +  PRODUCTOS DESTACADOS
+          3.  BANER PROMOCIONAL DE VENTAS AL POR MAYOR (NUEVO)
+          ════════════════════════════════════════════════════════════ */}
+      <section className="px-4 py-6 sm:px-6">
+        <div className="mx-auto max-w-7xl">
+          <motion.div
+            variants={fadeUp}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-950 via-zinc-900 to-black p-8 border border-emerald-500/30 text-white shadow-2xl"
+          >
+            <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
+            
+            <div className="flex flex-col lg:flex-row items-center justify-between gap-8 relative z-10">
+              <div className="space-y-2 text-center lg:text-left">
+                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase tracking-widest text-emerald-400 border border-emerald-500/20">
+                  <Zap className="h-3.5 w-3.5" /> Tarifas Mayoristas & Retail
+                </div>
+                <h2 className="font-['Oswald',sans-serif] text-3xl font-black uppercase tracking-tight sm:text-4xl lg:text-5xl">
+                  ¡Descuentos automáticos por cantidad!
+                </h2>
+                <p className="max-w-xl text-sm font-light text-zinc-300">
+                  Ahorra en tus compras de gran volumen. El descuento se aplica de manera automática en tu carrito y comprobante PDF al alcanzar las unidades.
+                </p>
+              </div>
+
+              {/* Tarjetas de Tarifa */}
+              <div className="grid grid-cols-3 gap-3 w-full sm:w-auto">
+                <div className="flex flex-col items-center justify-center rounded-2xl bg-white/5 p-4 text-center backdrop-blur-md border border-white/10 hover:border-emerald-500/50 transition-all hover:scale-105">
+                  <span className="text-2xl sm:text-3xl font-black text-emerald-400">-15%</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-white mt-1">Docena</span>
+                  <span className="text-[10px] text-zinc-400 font-mono">12+ unid.</span>
+                </div>
+
+                <div className="flex flex-col items-center justify-center rounded-2xl bg-white/5 p-4 text-center backdrop-blur-md border border-white/10 hover:border-emerald-500/50 transition-all hover:scale-105">
+                  <span className="text-2xl sm:text-3xl font-black text-emerald-400">-20%</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-white mt-1">Centenar</span>
+                  <span className="text-[10px] text-zinc-400 font-mono">100+ unid.</span>
+                </div>
+
+                <div className="flex flex-col items-center justify-center rounded-2xl bg-white/5 p-4 text-center backdrop-blur-md border border-white/10 hover:border-emerald-500/50 transition-all hover:scale-105">
+                  <span className="text-2xl sm:text-3xl font-black text-emerald-400">-30%</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-white mt-1">Millar</span>
+                  <span className="text-[10px] text-zinc-400 font-mono">1000+ unid.</span>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════════════
+          4.  COPY EMOCIONAL  +  PRODUCTOS DESTACADOS
           ════════════════════════════════════════════════════════════ */}
       <section className="bg-muted/30 px-4 py-24 sm:px-6">
         <div className="mx-auto max-w-7xl">
@@ -262,7 +314,7 @@ export default function HomeCliente() {
                 <Card className="group flex h-full flex-col overflow-hidden border-border/50 bg-card transition-all duration-500 hover:shadow-xl hover:-translate-y-1">
                   <div className="relative aspect-[1/1] overflow-hidden bg-muted">
                     <img
-                      src={product.image}
+                      src={product.imagen_url || product.image || product.imagen}
                       alt={product.name}
                       className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
                       onError={(e) => imgFallback(e, product.name)}
@@ -288,7 +340,7 @@ export default function HomeCliente() {
                     </p>
                     <h3 className="mt-0.5 font-semibold leading-tight">{product.name}</h3>
                     <p className="mt-auto pt-2 text-xl font-bold tracking-tight">
-                      S/{product.price.toFixed(2)}
+                      S/{Number(product.price).toFixed(2)}
                     </p>
                   </CardContent>
                 </Card>
@@ -317,7 +369,7 @@ export default function HomeCliente() {
       </section>
 
       {/* ════════════════════════════════════════════════════════════
-          4.  EDITORIAL BANNER  –  Full‑bleed brand moment
+          5.  EDITORIAL BANNER  –  Full‑bleed brand moment
           ════════════════════════════════════════════════════════════ */}
       <section className="relative h-[70vh] overflow-hidden sm:h-[80vh]">
         <img
@@ -343,10 +395,10 @@ export default function HomeCliente() {
               <br />
               INTELIGENTE
               <br />
-              EMPIEZA AQU&Iacute;
+              EMPIEZA AQUÍ
             </h2>
             <p className="mt-6 max-w-lg text-base font-light leading-relaxed text-white/60">
-              Datos, dise&ntilde;o y precisi&oacute;n italiana. Cada producto est&aacute;
+              Datos, diseño y precisión italiana. Cada producto está
               seleccionado para ofrecerte lo mejor del comercio del futuro.
             </p>
             <Button
@@ -354,7 +406,7 @@ export default function HomeCliente() {
               className="mt-8 h-12 rounded-full border-2 border-white bg-transparent px-8 text-sm font-semibold text-white transition-all hover:bg-white hover:text-black"
               onClick={() => navigate('/catalogo')}
             >
-              Descubrir Colecci&oacute;n
+              Descubrir Colección
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </motion.div>
@@ -362,7 +414,7 @@ export default function HomeCliente() {
       </section>
 
       {/* ════════════════════════════════════════════════════════════
-          5.  TRUST / FIDELITY  (estilo Nike - cards con hover)
+          6.  TRUST / FIDELITY  (estilo Nike - cards con hover)
           ════════════════════════════════════════════════════════════ */}
       <section className="px-4 py-20 sm:px-6">
         <div className="mx-auto max-w-7xl">

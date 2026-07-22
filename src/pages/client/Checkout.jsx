@@ -6,15 +6,17 @@ import { useCart } from '@/context/CartContext'
 import { useAuth } from '@/context/AuthContext'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { calculateOrderSummary } from '@/lib/discounts'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
 import {
   CreditCard, CheckCircle, ArrowLeft, ShoppingBag, Store,
-  Truck, ShieldCheck, Wallet, Landmark, Smartphone, Building2, XCircle,
+  Truck, ShieldCheck, Landmark, Smartphone, Building2, XCircle,
   Eye, EyeOff,
 } from 'lucide-react'
 import API from '@/lib/api'
+
+/* ─── LOGOS Y MÉTODOS DE PAGO ─── */
 
 function VisaLogo() {
   return (
@@ -30,7 +32,7 @@ function MastercardLogo() {
     <svg viewBox="0 0 36 22" className="h-4 w-7">
       <circle cx="13" cy="11" r="9" fill="#EB001B"/>
       <circle cx="23" cy="11" r="9" fill="#F79E1B"/>
-      <path fill="#FF5F00" d="M18 4.5c1.8 1.3 3 3.4 3 6.5s-1.2 5.2-3 6.5c-1.8-1.3-3-3.4-3-6.5s1.2-5.2 3-6.5z"/>
+      <path fill="#FF5F00" d="M18 4.5c1.8 1.3 3 3.4 3 6.5s-1.2 5.2-3 6.5c-1.8-1.3-3-3.4-3-6.5z"/>
     </svg>
   )
 }
@@ -39,7 +41,6 @@ function AmexLogo() {
   return (
     <svg viewBox="0 0 36 22" className="h-4 w-7">
       <rect width="36" height="22" rx="3" fill="#2E77BC"/>
-      <path fill="#fff" d="M4 5h28v12H4z" opacity="0"/>
       <text x="18" y="15" textAnchor="middle" fill="#fff" fontSize="9" fontFamily="Arial" fontWeight="bold">AMEX</text>
     </svg>
   )
@@ -145,17 +146,21 @@ const stagger = {
   visible: { opacity: 1, transition: { staggerChildren: 0.08 } },
 }
 
+/* ─── MAIN COMPONENT ─── */
+
 export default function Checkout() {
-  
-  const { items, totalPrice, clearCart } = useCart()
+  const { items, clearCart } = useCart()
   const { user } = useAuth()
   const navigate = useNavigate()
   const [paymentMethod, setPaymentMethod] = useState('Tarjeta')
   const [processing, setProcessing] = useState(false)
   const [completed, setCompleted] = useState(false)
   const [error, setError] = useState(null)
+  
+  const summary = calculateOrderSummary(items)  
   const [transaccionId, setTransaccionId] = useState(null)
- const [form, setForm] = useState({
+
+  const [form, setForm] = useState({
     nombre: '',
     direccion: '',
     ciudad: '',
@@ -164,71 +169,14 @@ export default function Checkout() {
     numeroTarjeta: '',
     expiracion: '',
     cvv: '',
-    email: '', // 👈 Añadimos solo esta línea
+    email: '',
   })
+  
   const [errors, setErrors] = useState({})
   const [showCVV, setShowCVV] = useState(false)
-  
 
-const handleSubmit = async (e) => {
-  e.preventDefault()
-  if (!validateForm()) return
-  setProcessing(true)
-  setError(null)
+  const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
 
-  try {
-    const itemsPedido = items.map(item => ({
-      id_producto: item.id,
-      cantidad: item.quantity,
-      precio_unitario: item.price
-    }))
-
-    // 1️⃣ Creamos el pedido (esto es lo que ya se está guardando en tu Base de Datos)
-    const resPedido = await API.post('/pedidos', {
-      items: itemsPedido,
-      nombre_envio: form.nombre,
-      direccion_envio: form.direccion,
-      ciudad_envio: form.ciudad,
-      codigo_postal: form.codigoPostal,
-      telefono_envio: form.telefono,
-      metodo_pago: paymentMethod
-    })
-
-    const pedidoCreado = resPedido.data
-
-    // 2️⃣ Preparamos los datos del pago de forma dinámica según lo que el usuario llene
-    const datosPago = { telefono: form.telefono }
-    
-    // Solo si el cliente elige Tarjeta, extraemos lo que haya escrito dinámicamente en el formulario
-    if (paymentMethod === 'Tarjeta') {
-      datosPago.numeroTarjeta = form.numeroTarjeta ? form.numeroTarjeta.replace(/\s/g, '') : ''
-      datosPago.expiracion = form.expiracion || ''
-      datosPago.cvv = form.cvv || ''
-    }
-
-    // 3️⃣ Procesamos el pago en el backend
-    const resPago = await API.post('/pagos/procesar', {
-      pedido_id: pedidoCreado.id,
-      metodo_pago: paymentMethod,
-      datos_pago: datosPago,
-    })
-
-    // 📄 Si el pago del backend responde con éxito, lanzamos el PDF con el email dinámico del formulario
-    generarComprobantePDF(pedidoCreado, items, paymentMethod, form.email)
-
-    setTransaccionId(resPago.data.transaccion_id || pedidoCreado.codigo)
-    setCompleted(true)
-    clearCart()
-  } catch (err) {
-    console.error("Error procesando el flujo de compra:", err)
-    const errorData = err.response?.data?.error || { 
-      mensaje: err.response?.data?.mensaje || 'Error al procesar el pedido y pago.' 
-    }
-    setError(errorData)
-  } finally {
-    setProcessing(false)
-  }
-}
   function validateField(name, value) {
     switch (name) {
       case 'nombre':
@@ -243,12 +191,6 @@ const handleSubmit = async (e) => {
         return /^\d{0,15}$/.test(value) ? '' : 'Solo números'
       case 'email':
         return /\S+@\S+\.\S+/.test(value) ? '' : 'Correo inválido'
-      case 'numeroTarjeta':
-        return /^\d*$/.test(value) ? '' : 'Solo números'
-      case 'expiracion':
-        return /^\d*$/.test(value) ? '' : 'Solo números'
-      case 'cvv':
-        return /^\d*$/.test(value) ? '' : 'Solo números'
       default:
         return ''
     }
@@ -268,46 +210,32 @@ const handleSubmit = async (e) => {
     setErrors((prev) => ({ ...prev, [name]: err }))
   }
 
-function validateForm() {
+  function validateForm() {
     const newErrors = {}
     
-    // Validaciones fijas para el envío (Obligatorias siempre)
     if (!form.nombre.trim()) newErrors.nombre = 'Requerido'
     if (!form.direccion.trim()) newErrors.direccion = 'Requerido'
     if (!form.ciudad.trim()) newErrors.ciudad = 'Requerido'
     if (!form.codigoPostal.trim()) newErrors.codigoPostal = 'Requerido'
 
-    // 📞 Validación fija del teléfono: Ahora es OBLIGATORIA para cualquier método de pago
     if (!form.telefono.trim()) {
       newErrors.telefono = 'Requerido'
     } else if (form.telefono.replace(/\D/g, '').length < 9) {
       newErrors.telefono = 'Mínimo 9 dígitos'
     }
 
-    // ✉️ Validación fija del correo: OBLIGATORIA para cualquier método de pago
     if (!form.email.trim()) {
       newErrors.email = 'Requerido'
     } else if (!/\S+@\S+\.\S+/.test(form.email)) {
       newErrors.email = 'Correo inválido'
     }
 
-    // 💳 Validación de Tarjeta: SOLO si el método es Tarjeta
     if (paymentMethod === 'Tarjeta') {
       if (!form.numeroTarjeta) newErrors.numeroTarjeta = 'Requerido'
       else if (form.numeroTarjeta.replace(/\s/g, '').length < 13) newErrors.numeroTarjeta = 'Número inválido'
 
       if (!form.expiracion) newErrors.expiracion = 'Requerido'
       else if (form.expiracion.length < 4) newErrors.expiracion = 'Fecha inválida'
-      else {
-        const mm = parseInt(form.expiracion.slice(0, 2), 10)
-        const yy = parseInt('20' + form.expiracion.slice(2), 10)
-        if (mm < 1 || mm > 12) newErrors.expiracion = 'Mes inválido'
-        else {
-          const now = new Date()
-          const exp = new Date(yy, mm)
-          if (exp < now) newErrors.expiracion = 'Tarjeta vencida'
-        }
-      }
 
       if (!form.cvv) newErrors.cvv = 'Requerido'
       else if (form.cvv.length < 3) newErrors.cvv = 'CVV inválido'
@@ -316,12 +244,85 @@ function validateForm() {
     return Object.keys(newErrors).length === 0
   }
 
-  const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!validateForm()) return
+    setProcessing(true)
+    setError(null)
 
-  const shipping = 0
-  const finalTotal = totalPrice + shipping
+    try {
+      const itemsPedido = items.map((item) => ({
+        id_producto: item.id,
+        producto_id: item.id,
+        cantidad: item.quantity,
+        precio_unitario: Number(item.price),
+        subtotal: Number(item.price) * item.quantity,
+      }))
 
-  /* ─── SUCCESS ─── */
+      const resPedido = await API.post('/pedidos', {
+        items: itemsPedido,
+        nombre_envio: form.nombre,
+        direccion_envio: form.direccion,
+        ciudad_envio: form.ciudad,
+        codigo_postal: form.codigoPostal,
+        telefono_envio: form.telefono,
+        email_envio: form.email,
+        metodo_pago: paymentMethod,
+        total: summary.total,
+        subtotal: summary.subtotal,
+        descuento: summary.discountAmount,
+      })
+
+      const pedidoCreado = resPedido.data
+
+      const datosPago = { telefono: form.telefono }
+      if (paymentMethod === 'Tarjeta') {
+        datosPago.numeroTarjeta = form.numeroTarjeta ? form.numeroTarjeta.replace(/\s/g, '') : ''
+        datosPago.expiracion = form.expiracion || ''
+        datosPago.cvv = form.cvv || ''
+      }
+
+      const resPago = await API.post('/pagos/procesar', {
+        pedido_id: pedidoCreado.id || pedidoCreado.pedido_id,
+        metodo_pago: paymentMethod,
+        datos_pago: datosPago,
+        monto: summary.total,
+      })
+
+      // 📄 Generación de PDF protegida con objeto enriquecido
+      try {
+        const pedidoParaPDF = {
+          ...pedidoCreado,
+          subtotal: summary.subtotal,
+          descuento: summary.discountAmount,
+          total: summary.total,
+          nombre_envio: form.nombre,
+          direccion_envio: form.direccion,
+          ciudad_envio: form.ciudad,
+          telefono_envio: form.telefono,
+          email_envio: form.email,
+          metodo_pago: paymentMethod
+        }
+        generarComprobantePDF(pedidoParaPDF, items, paymentMethod, form.email)
+      } catch (pdfErr) {
+        console.warn("PDF no generado automáticamente:", pdfErr)
+      }
+
+      setTransaccionId(resPago.data?.transaccion_id || pedidoCreado.codigo || 'TX-' + Date.now())
+      setCompleted(true)
+      clearCart()
+    } catch (err) {
+      console.error("Error en flujo de compra:", err)
+      const msg = err.response?.data?.error?.mensaje 
+        || err.response?.data?.mensaje 
+        || err.response?.data?.message 
+        || 'Error al procesar el pedido y pago.'
+      setError({ mensaje: msg })
+    } finally {
+      setProcessing(false)
+    }
+  }
+
   if (completed) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-zinc-50 to-white p-4 dark:from-zinc-950 dark:to-zinc-900">
@@ -347,25 +348,17 @@ function validateForm() {
               </h2>
               {transaccionId && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Transacci&oacute;n: <span className="font-mono text-emerald-400">{transaccionId}</span>
+                  Transacción: <span className="font-mono text-emerald-400">{transaccionId}</span>
                 </p>
               )}
               <p className="mt-3 text-sm font-light text-muted-foreground">
-                Gracias por tu compra. Recibir&aacute;s un correo con los detalles
-                de env&iacute;o a la brevedad.
+                Gracias por tu compra. Recibirás un correo con los detalles de envío a la brevedad.
               </p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-                <Button
-                  className="h-11 rounded-full px-8 text-sm font-semibold"
-                  onClick={() => navigate('/')}
-                >
+                <Button className="h-11 rounded-full px-8 text-sm font-semibold" onClick={() => navigate('/')}>
                   Ir al Inicio
                 </Button>
-                <Button
-                  variant="outline"
-                  className="h-11 rounded-full px-8 text-sm font-semibold"
-                  onClick={() => navigate('/mis-pedidos')}
-                >
+                <Button variant="outline" className="h-11 rounded-full px-8 text-sm font-semibold" onClick={() => navigate('/mis-pedidos')}>
                   Ver Mis Pedidos
                 </Button>
               </div>
@@ -376,46 +369,35 @@ function validateForm() {
     )
   }
 
-  /* ─── EMPTY ─── */
   if (items.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md text-center"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md text-center">
           <div className="mx-auto mb-6 flex h-20 w-20 items-center justify-center rounded-2xl bg-muted">
             <ShoppingBag className="h-10 w-10 text-muted-foreground" />
           </div>
           <h2 className="font-['Oswald',sans-serif] text-3xl font-black uppercase tracking-tighter">
-            Carrito Vac&iacute;o
+            Carrito Vacío
           </h2>
           <p className="mt-2 text-sm font-light text-muted-foreground">
             Agrega productos al carrito antes de proceder al pago.
           </p>
-          <Button
-            className="mt-8 h-11 rounded-full px-8"
-            onClick={() => navigate('/catalogo')}
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" /> Ir al Cat&aacute;logo
+          <Button className="mt-8 h-11 rounded-full px-8" onClick={() => navigate('/catalogo')}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Ir al Catálogo
           </Button>
         </motion.div>
       </div>
     )
   }
 
-  /* ─── CHECKOUT FORM ─── */
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-50 to-white px-4 py-8 dark:from-zinc-950 dark:to-zinc-900 sm:px-6">
-      {/* Minimalist header */}
       <div className="mx-auto mb-8 flex max-w-6xl items-center justify-between">
         <button
           onClick={() => navigate('/catalogo')}
           className="flex items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
         >
-          <ArrowLeft className="h-4 w-4" />
-          Volver
+          <ArrowLeft className="h-4 w-4" /> Volver
         </button>
         <div className="flex items-center gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary shadow-sm">
@@ -427,14 +409,8 @@ function validateForm() {
         </div>
       </div>
 
-      <motion.div
-        className="mx-auto max-w-6xl"
-        variants={stagger}
-        initial="hidden"
-        animate="visible"
-      >
+      <motion.div className="mx-auto max-w-6xl" variants={stagger} initial="hidden" animate="visible">
         <div className="grid gap-8 lg:grid-cols-5">
-          {/* ─── FORM ─── */}
           <motion.div variants={fadeUp} className="lg:col-span-3">
             <h1 className="font-['Oswald',sans-serif] text-4xl font-black uppercase tracking-tighter sm:text-5xl">
               Checkout
@@ -444,13 +420,11 @@ function validateForm() {
             </p>
 
             <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-              {/* Shipping information */}
               <Card className="overflow-hidden border-border/50">
                 <div className="h-1 bg-gradient-to-r from-primary/50 to-primary" />
                 <CardContent className="p-6 sm:p-8">
                   <h2 className="mb-6 flex items-center gap-2 text-base font-semibold">
-                    <Truck className="h-4 w-4 text-muted-foreground" />
-                    Informaci&oacute;n de Env&iacute;o
+                    <Truck className="h-4 w-4 text-muted-foreground" /> Información de Envío
                   </h2>
                   <div className="space-y-4">
                     <div>
@@ -468,7 +442,7 @@ function validateForm() {
                     </div>
                     <div>
                       <label htmlFor="direccion" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                        Direcci&oacute;n
+                        Dirección
                       </label>
                       <Input
                         id="direccion"
@@ -495,7 +469,7 @@ function validateForm() {
                       </div>
                       <div>
                         <label htmlFor="codigoPostal" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          C&oacute;digo Postal
+                          Código Postal
                         </label>
                         <Input
                           id="codigoPostal"
@@ -508,7 +482,6 @@ function validateForm() {
                       </div>
                     </div>
 
-                    {/* 📞 Nueva fila para Teléfono y Correo Corregida */}
                     <div className="grid gap-4 sm:grid-cols-2 pt-2">
                       <div>
                         <label htmlFor="telefono" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -538,18 +511,15 @@ function validateForm() {
                         {errors.email && <p className="mt-1 text-xs text-red-400">{errors.email}</p>}
                       </div>
                     </div>
-
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Payment method */}
               <Card className="overflow-hidden border-border/50">
                 <div className="h-1 bg-gradient-to-r from-primary/50 to-primary" />
                 <CardContent className="p-6 sm:p-8">
                   <h2 className="mb-6 flex items-center gap-2 text-base font-semibold">
-                    <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                    M&eacute;todo de Pago
+                    <ShieldCheck className="h-4 w-4 text-muted-foreground" /> Método de Pago
                   </h2>
                   <div className="grid gap-3 sm:grid-cols-3">
                     {[
@@ -567,16 +537,11 @@ function validateForm() {
                           type="button"
                           onClick={() => setPaymentMethod(m.id)}
                           className={`group relative rounded-xl border-2 p-5 text-left transition-all ${
-                            active
-                              ? 'border-primary bg-primary/5 shadow-sm'
-                              : 'border-border/50 hover:border-muted-foreground/30'
+                            active ? 'border-primary bg-primary/5 shadow-sm' : 'border-border/50 hover:border-muted-foreground/30'
                           }`}
                         >
                           {active && (
-                            <motion.div
-                              layoutId="payment-indicator"
-                              className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-primary"
-                            />
+                            <motion.div layoutId="payment-indicator" className="absolute right-3 top-3 h-2.5 w-2.5 rounded-full bg-primary" />
                           )}
                           <Icon className={`mb-3 h-6 w-6 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
                           <p className="text-sm font-semibold">{m.label}</p>
@@ -588,9 +553,9 @@ function validateForm() {
 
                   {paymentMethod === 'Tarjeta' && (
                     <div className="mt-4 space-y-4">
-                      <div className="relative">
+                      <div>
                         <label htmlFor="numeroTarjeta" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          N&uacute;mero de Tarjeta
+                          Número de Tarjeta
                         </label>
                         <div className="relative">
                           <Input
@@ -652,9 +617,6 @@ function validateForm() {
                           {errors.cvv && <p className="mt-1 text-xs text-red-400">{errors.cvv}</p>}
                         </div>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Prueba: 4111 1111 1111 1111 (éxito) &middot; 4000 0000 0000 0002 (falla)
-                      </p>
                     </div>
                   )}
                 </CardContent>
@@ -667,7 +629,7 @@ function validateForm() {
                     <div>
                       <p className="text-sm font-medium text-rose-400">Pago rechazado</p>
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {error.mensaje || 'Error desconocido'}
+                        {error.mensaje || 'Error al procesar la orden'}
                       </p>
                     </div>
                   </div>
@@ -685,18 +647,16 @@ function validateForm() {
                     Procesando pago...
                   </span>
                 ) : (
-                  `Pagar S/${finalTotal.toFixed(2)}`
+                  `Pagar S/${summary.total.toFixed(2)}`
                 )}
               </Button>
 
               <p className="text-center text-[11px] text-muted-foreground">
-                <ShieldCheck className="mr-1 inline-block h-3 w-3" />
-                Pago 100% seguro cifrado con SSL
+                <ShieldCheck className="mr-1 inline-block h-3 w-3" /> Pago 100% seguro cifrado con SSL
               </p>
             </form>
           </motion.div>
 
-          {/* ─── ORDER SUMMARY ─── */}
           <motion.div variants={fadeUp} className="lg:col-span-2">
             <div className="sticky top-24">
               <Card className="overflow-hidden border-border/50">
@@ -706,12 +666,12 @@ function validateForm() {
                     Resumen
                   </h2>
 
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
                     {items.map((item) => (
                       <div key={item.id} className="flex items-center gap-4">
                         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-zinc-50 dark:bg-zinc-900">
                           <img
-                            src={item.image}
+                            src={item.image || item.imagen_url || item.imagen}
                             alt={item.name}
                             className="h-full w-full object-cover"
                             onError={(e) => { e.target.style.display = 'none' }}
@@ -733,31 +693,30 @@ function validateForm() {
                   <Separator className="my-5" />
 
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Subtotal</span>
-                      <span>S/{totalPrice.toFixed(2)}</span>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Subtotal ({summary.totalUnits} items)</span>
+                      <span className="font-mono">S/{summary.subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-muted-foreground">
-                      <span>Env&iacute;o</span>
-                      <span className="font-medium text-emerald-500">Gratis</span>
+
+                    {summary.discountPercentage > 0 && (
+                      <div className="flex justify-between text-emerald-500 font-medium">
+                        <span>{summary.discountLabel}</span>
+                        <span className="font-mono">-S/{summary.discountAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between text-base font-bold pt-2 border-t">
+                      <span>Total Final</span>
+                      <span className="font-mono text-emerald-500">S/{summary.total.toFixed(2)}</span>
                     </div>
-                  </div>
-
-                  <Separator className="my-5" />
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold">Total</span>
-                    <span className="font-['Oswald',sans-serif] text-2xl font-bold tracking-tight">
-                      S/{finalTotal.toFixed(2)}
-                    </span>
                   </div>
 
                   <div className="mt-6 flex flex-col gap-2 rounded-xl bg-muted/50 p-4 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1.5">
-                      <Truck className="h-3 w-3" /> Env&iacute;o express 24/48h
+                      <Truck className="h-3 w-3" /> Envío express 24/48h
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <ShieldCheck className="h-3 w-3" /> Devoluci&oacute;n gratuita
+                      <ShieldCheck className="h-3 w-3" /> Devolución gratuita
                     </span>
                   </div>
                 </CardContent>
