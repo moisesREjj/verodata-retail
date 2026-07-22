@@ -5,20 +5,21 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  LineChart, Line, AreaChart, Area, PieChart, Pie, Legend,
+  AreaChart, Area, PieChart, Pie, Legend,
 } from 'recharts'
 import {
   TrendingUp, DollarSign, ShoppingCart, CreditCard, Package,
   AlertTriangle, ArrowUpDown, ChevronLeft, ChevronRight,
-  Users, BarChart3, PieChart as PieChartIcon, Activity, Clock,
+  Users, BarChart3, PieChart as PieChartIcon, Activity, Download,
 } from 'lucide-react'
 import API from '@/lib/api'
 import DateRangeFilter from '@/components/DateRangeFilter'
+import { generarReporteEjecutivoPDF } from '@/lib/reporteEjecutivoPDF'
 
 const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#14b8a6', '#f97316']
 
 const formatSol = (n) =>
-  `S/${Number(n).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  `S/${Number(n || 0).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 export default function AnalystDashboard() {
   const [tab, setTab] = useState('resumen')
@@ -73,6 +74,26 @@ export default function AnalystDashboard() {
     if (dateRange) fetchData()
   }, [dateRange]) // eslint-disable-line
 
+  // 📄 Función para gatillar la descarga del Reporte PDF
+  const handleExportPDF = () => {
+    const totalClientesNuevos = tendenciaClientes.reduce((acc, c) => acc + (c.nuevos || 0), 0)
+
+    generarReporteEjecutivoPDF({
+      ventasTotales: kpi?.ingresos_totales || 0,
+      ticketPromedio: kpi?.ticket_promedio || 0,
+      clientesNuevos: totalClientesNuevos,
+      pedidos: tendencia.map((t) => ({
+        codigo: `VENTA-${t.fecha}`,
+        nombre_envio: 'Ventas Consolidadas',
+        fecha: t.fecha,
+        estado: 'Pagado',
+        total: t.total,
+      })),
+      topProductos: productosTop.top || [],
+      rangoFecha: dateRange?.desde ? `${dateRange.desde} al ${dateRange.hasta}` : 'Mes Actual',
+    })
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -83,14 +104,24 @@ export default function AnalystDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* CABECERA CON BOTÓN DE EXPORTACIÓN */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Panel de Analista de Negocio</h1>
           <p className="text-sm text-muted-foreground">
             KPIs, tendencias, rotación de stock y análisis de pagos.
           </p>
         </div>
-        <DateRangeFilter onChange={setDateRange} />
+        <div className="flex items-center gap-3">
+          <DateRangeFilter onChange={setDateRange} />
+          <Button
+            onClick={handleExportPDF}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-2 text-xs shadow-md"
+          >
+            <Download className="h-4 w-4" />
+            Exportar Reporte Ejecutivo
+          </Button>
+        </div>
       </div>
 
       <KpiCards kpi={kpi} />
@@ -189,7 +220,7 @@ function KpiCards({ kpi }) {
     },
     {
       title: 'Tasa de Conversión',
-      value: `${Number(kpi.tasa_conversion).toFixed(1)}%`,
+      value: `${Number(kpi.tasa_conversion || 0).toFixed(1)}%`,
       icon: TrendingUp,
       desc: 'Carritos convertidos en pagos',
       color: 'text-blue-400',
@@ -197,7 +228,7 @@ function KpiCards({ kpi }) {
     },
     {
       title: 'Tasa de Rechazo',
-      value: `${Number(kpi.tasa_rechazo).toFixed(1)}%`,
+      value: `${Number(kpi.tasa_rechazo || 0).toFixed(1)}%`,
       icon: CreditCard,
       desc: 'Pagos rechazados del total',
       color: 'text-rose-400',

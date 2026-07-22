@@ -177,20 +177,31 @@ export default function Checkout() {
 
   const update = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
 
+  // Validaciones de campos individuales con soporte de tildes y eñes
   function validateField(name, value) {
     switch (name) {
       case 'nombre':
-        return /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/.test(value) ? '' : 'Solo letras'
+        if (!value.trim()) return 'Requerido'
+        return /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/.test(value) ? '' : 'No se permiten números ni símbolos'
       case 'direccion':
-        return value.length > 0 ? '' : 'Requerido'
+        return value.trim().length > 0 ? '' : 'Requerido'
       case 'ciudad':
-        return /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/.test(value) ? '' : 'Solo letras'
+        if (!value.trim()) return 'Requerido'
+        return /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]+$/.test(value) ? '' : 'No se permiten números ni símbolos'
       case 'codigoPostal':
-        return /^\d{0,10}$/.test(value) ? '' : 'Solo números'
+        if (!value.trim()) return 'Requerido'
+        return /^\d{1,10}$/.test(value) ? '' : 'Solo números'
       case 'telefono':
-        return /^\d{0,15}$/.test(value) ? '' : 'Solo números'
+        if (!value.trim()) return 'Requerido'
+        if (!/^\d+$/.test(value)) return 'Solo números'
+        if (value.length !== 9) return 'Debe tener exactamente 9 dígitos'
+        if (!value.startsWith('9')) return 'Debe empezar con 9'
+        return ''
       case 'email':
-        return /\S+@\S+\.\S+/.test(value) ? '' : 'Correo inválido'
+        if (!value.trim()) return 'Requerido'
+        return /^[a-zA-Z0-9._%+-]+@(gmail\.com|hotmail\.com)$/i.test(value)
+          ? ''
+          : 'Debe terminar en @gmail.com o @hotmail.com'
       default:
         return ''
     }
@@ -198,9 +209,13 @@ export default function Checkout() {
 
   function handleChange(name, value) {
     let clean = value
+    
+    // Limpieza estricta solo para campos que son puramente numéricos
     if (['codigoPostal', 'telefono', 'numeroTarjeta', 'cvv', 'expiracion'].includes(name)) {
       clean = value.replace(/\D/g, '')
     }
+    
+    // Para nombre y ciudad se filtran únicamente símbolos raros y números, PERMITIENDO tildes
     if (['nombre', 'ciudad'].includes(name)) {
       clean = value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, '')
     }
@@ -213,23 +228,26 @@ export default function Checkout() {
   function validateForm() {
     const newErrors = {}
     
-    if (!form.nombre.trim()) newErrors.nombre = 'Requerido'
-    if (!form.direccion.trim()) newErrors.direccion = 'Requerido'
-    if (!form.ciudad.trim()) newErrors.ciudad = 'Requerido'
-    if (!form.codigoPostal.trim()) newErrors.codigoPostal = 'Requerido'
+    // Validar datos de envío
+    const errNombre = validateField('nombre', form.nombre)
+    if (errNombre) newErrors.nombre = errNombre
 
-    if (!form.telefono.trim()) {
-      newErrors.telefono = 'Requerido'
-    } else if (form.telefono.replace(/\D/g, '').length < 9) {
-      newErrors.telefono = 'Mínimo 9 dígitos'
-    }
+    const errDireccion = validateField('direccion', form.direccion)
+    if (errDireccion) newErrors.direccion = errDireccion
 
-    if (!form.email.trim()) {
-      newErrors.email = 'Requerido'
-    } else if (!/\S+@\S+\.\S+/.test(form.email)) {
-      newErrors.email = 'Correo inválido'
-    }
+    const errCiudad = validateField('ciudad', form.ciudad)
+    if (errCiudad) newErrors.ciudad = errCiudad
 
+    const errCodigoPostal = validateField('codigoPostal', form.codigoPostal)
+    if (errCodigoPostal) newErrors.codigoPostal = errCodigoPostal
+
+    const errTelefono = validateField('telefono', form.telefono)
+    if (errTelefono) newErrors.telefono = errTelefono
+
+    const errEmail = validateField('email', form.email)
+    if (errEmail) newErrors.email = errEmail
+
+    // Validar tarjeta solo si se seleccionó ese método
     if (paymentMethod === 'Tarjeta') {
       if (!form.numeroTarjeta) newErrors.numeroTarjeta = 'Requerido'
       else if (form.numeroTarjeta.replace(/\s/g, '').length < 13) newErrors.numeroTarjeta = 'Número inválido'
@@ -240,6 +258,7 @@ export default function Checkout() {
       if (!form.cvv) newErrors.cvv = 'Requerido'
       else if (form.cvv.length < 3) newErrors.cvv = 'CVV inválido'
     }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -289,7 +308,7 @@ export default function Checkout() {
         monto: summary.total,
       })
 
-      // 📄 Generación de PDF protegida con objeto enriquecido
+      // 📄 Generación de PDF
       try {
         const pedidoParaPDF = {
           ...pedidoCreado,
@@ -429,53 +448,55 @@ export default function Checkout() {
                   <div className="space-y-4">
                     <div>
                       <label htmlFor="nombre" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                        Nombre Completo
+                        Nombre Completo *
                       </label>
                       <Input
                         id="nombre"
                         value={form.nombre}
                         onChange={(e) => handleChange('nombre', e.target.value)}
-                        placeholder="Ej: Juan Pérez"
+                        placeholder="Ej: María García"
                         className={`h-11 rounded-lg ${errors.nombre ? 'border-red-500' : 'border-border/50'}`}
                       />
                       {errors.nombre && <p className="mt-1 text-xs text-red-400">{errors.nombre}</p>}
                     </div>
+
                     <div>
                       <label htmlFor="direccion" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                        Dirección
+                        Dirección *
                       </label>
                       <Input
                         id="direccion"
                         value={form.direccion}
-                        onChange={(e) => update('direccion', e.target.value)}
-                        placeholder="Ej: Calle Roma 123"
+                        onChange={(e) => handleChange('direccion', e.target.value)}
+                        placeholder="Ej: Av. Primavera 123"
                         className={`h-11 rounded-lg ${errors.direccion ? 'border-red-500' : 'border-border/50'}`}
                       />
                       {errors.direccion && <p className="mt-1 text-xs text-red-400">{errors.direccion}</p>}
                     </div>
+
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
                         <label htmlFor="ciudad" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          Ciudad
+                          Ciudad *
                         </label>
                         <Input
                           id="ciudad"
                           value={form.ciudad}
                           onChange={(e) => handleChange('ciudad', e.target.value)}
-                          placeholder="Ej: Milán"
+                          placeholder="Ej: Lima"
                           className={`h-11 rounded-lg ${errors.ciudad ? 'border-red-500' : 'border-border/50'}`}
                         />
                         {errors.ciudad && <p className="mt-1 text-xs text-red-400">{errors.ciudad}</p>}
                       </div>
                       <div>
                         <label htmlFor="codigoPostal" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          Código Postal
+                          Código Postal *
                         </label>
                         <Input
                           id="codigoPostal"
                           value={form.codigoPostal}
                           onChange={(e) => handleChange('codigoPostal', e.target.value)}
-                          placeholder="12345"
+                          placeholder="15001"
                           className={`h-11 rounded-lg ${errors.codigoPostal ? 'border-red-500' : 'border-border/50'}`}
                         />
                         {errors.codigoPostal && <p className="mt-1 text-xs text-red-400">{errors.codigoPostal}</p>}
@@ -485,11 +506,12 @@ export default function Checkout() {
                     <div className="grid gap-4 sm:grid-cols-2 pt-2">
                       <div>
                         <label htmlFor="telefono" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          Teléfono de Contacto *
+                          Teléfono de Contacto (9 dígitos) *
                         </label>
                         <Input 
                           id="telefono"
                           placeholder="Ej: 912345678" 
+                          maxLength={9}
                           value={form.telefono} 
                           onChange={(e) => handleChange('telefono', e.target.value)} 
                           className={`h-11 rounded-lg ${errors.telefono ? 'border-red-500' : 'border-border/50'}`}
@@ -498,12 +520,12 @@ export default function Checkout() {
                       </div>
                       <div>
                         <label htmlFor="email" className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                          Correo Electrónico *
+                          Correo Electrónico (@gmail/@hotmail) *
                         </label>
                         <Input 
                           id="email"
                           type="email"
-                          placeholder="Ej: cliente@correo.com" 
+                          placeholder="Ej: usuario@gmail.com" 
                           value={form.email} 
                           onChange={(e) => handleChange('email', e.target.value)} 
                           className={`h-11 rounded-lg ${errors.email ? 'border-red-500' : 'border-border/50'}`}
