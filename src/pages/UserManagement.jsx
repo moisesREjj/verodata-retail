@@ -12,15 +12,16 @@ import {
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import API from '@/lib/api'
-import { Plus, Pencil, Trash2, Search, RefreshCw, UserCircle, Eye, EyeOff } from 'lucide-react'
+import { Plus, Pencil, Trash2, Search, RefreshCw, UserCircle, Eye, EyeOff, Filter } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default function UserManagement() {
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState('ALL')
 
   const [createOpen, setCreateOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -29,12 +30,12 @@ export default function UserManagement() {
 
   const [showPassword, setShowPassword] = useState(false)
   
-  // MODIFICACIÓN 1: El estado inicial ahora usa 'ROLE_CLIENTE' por defecto pero el flujo enviará el rol seleccionado
   const [createForm, setCreateForm] = useState({ nombre: '', email: '', password: '', rol: 'ROLE_CLIENTE' })
   const [editForm, setEditForm] = useState({ nombre: '', email: '' })
 
   const fetchUsers = useCallback(async () => {
     try {
+      setLoading(true)
       const res = await API.get('/auth/usuarios')
       setUsers(res.data)
     } catch (err) {
@@ -48,36 +49,45 @@ export default function UserManagement() {
     fetchUsers()
   }, [fetchUsers])
 
- const handleCreate = async (e) => {
+  // Helper para interpretar el rol dinámicamente desde cualquier estructura que devuelva el Backend
+  const getRoleInfo = (user) => {
+    const rawRole = user.id_rol ?? user.rol?.id ?? user.rol?.nombre ?? user.rol
+    const roleStr = String(rawRole || '').toUpperCase()
+
+    if (roleStr === '1' || roleStr.includes('ADMIN')) {
+      return { code: 'ROLE_ADMIN', label: 'Administrador', badgeVariant: 'default' }
+    }
+    if (roleStr === '3' || roleStr.includes('ANALISTA')) {
+      return { code: 'ROLE_ANALISTA', label: 'Analista', badgeVariant: 'outline' }
+    }
+    return { code: 'ROLE_CLIENTE', label: 'Cliente', badgeVariant: 'secondary' }
+  }
+
+  const handleCreate = async (e) => {
     e.preventDefault()
     try {
-      // 🗺️ Mapeamos los roles de tipo string a sus IDs numéricos correspondientes en Supabase
       const rolMapping = {
         'ROLE_ADMIN': 1,
         'ROLE_CLIENTE': 2,
         'ROLE_ANALISTA': 3
       }
 
-      // Preparamos los datos enviando 'id_rol' en lugar del string de texto
       const datosRegistro = {
         nombre: createForm.nombre,
         email: createForm.email,
         password: createForm.password,
-        id_rol: rolMapping[createForm.rol] || 2 // Por defecto 2 (Cliente) si algo falla
+        id_rol: rolMapping[createForm.rol] || 2
       }
 
-      console.log("Enviando datos mapeados de registro:", datosRegistro)
-      
       await API.post('/auth/registrar', datosRegistro)
       
-      // Si todo sale bien, cerramos el modal, limpiamos el formulario y recargamos la lista
       setCreateOpen(false)
       setCreateForm({ nombre: '', email: '', password: '', rol: 'ROLE_CLIENTE' })
       fetchUsers()
       alert("¡Usuario creado con éxito!")
     } catch (err) {
-      console.error("Error detallado al registrar:", err)
-      const mensajeError = err.response?.data?.mensaje || err.response?.data?.error || "Error desconocido al registrar usuario."
+      console.error("Error al registrar:", err)
+      const mensajeError = err.response?.data?.mensaje || err.response?.data?.error || "Error al registrar usuario."
       alert(`No se pudo crear el usuario: ${mensajeError}`)
     }
   }
@@ -103,9 +113,19 @@ export default function UserManagement() {
       setDeleteOpen(false)
       setSelectedUser(null)
       fetchUsers()
+      alert("Usuario eliminado correctamente.")
     } catch (err) {
-      console.error(err)
-      alert("Error al eliminar usuario.")
+      console.error("Error al eliminar usuario:", err)
+      setDeleteOpen(false)
+      
+      const status = err.response?.status
+      const msg = err.response?.data?.mensaje || err.response?.data?.error
+
+      if (status === 400 || status === 409 || status === 500) {
+        alert(`No se puede eliminar a "${selectedUser.nombre}" porque posee registros asociados (pedidos, carritos o historial de pagos) en la base de datos.`)
+      } else {
+        alert(msg || "Error al eliminar usuario.")
+      }
     }
   }
 
@@ -120,11 +140,17 @@ export default function UserManagement() {
     setDeleteOpen(true)
   }
 
-  const filtered = users.filter(
-    (u) =>
+  // Filtrado compuesto por Texto (Nombre/Email) y Filtro de Rol
+  const filtered = users.filter((u) => {
+    const matchesSearch =
       u.nombre?.toLowerCase().includes(search.toLowerCase()) ||
       u.email?.toLowerCase().includes(search.toLowerCase())
-  )
+
+    const roleInfo = getRoleInfo(u)
+    const matchesRole = roleFilter === 'ALL' || roleInfo.code === roleFilter
+
+    return matchesSearch && matchesRole
+  })
 
   return (
     <div className="space-y-6">
@@ -142,7 +168,7 @@ export default function UserManagement() {
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger asChild>
               <Button size="sm">
-                <Plus className="h-4 w-4" />
+                <Plus className="h-4 w-4 mr-1" />
                 Crear Usuario
               </Button>
             </DialogTrigger>
@@ -205,7 +231,6 @@ export default function UserManagement() {
                       <SelectContent>
                         <SelectItem value="ROLE_CLIENTE">Cliente</SelectItem>
                         <SelectItem value="ROLE_ADMIN">Administrador</SelectItem>
-                        {/* MODIFICACIÓN 4: Añadido el ítem "Analista" que envía "ROLE_ANALISTA" */}
                         <SelectItem value="ROLE_ANALISTA">Analista</SelectItem>
                       </SelectContent>
                     </Select>
@@ -222,14 +247,32 @@ export default function UserManagement() {
 
       <Card className="border-border/50">
         <CardHeader className="pb-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Buscar usuarios por nombre o email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 max-w-sm"
-            />
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="relative w-full sm:max-w-sm">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Buscar usuarios por nombre o email..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            {/* FILTRO POR ROL */}
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filtrar por rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Todos los roles</SelectItem>
+                  <SelectItem value="ROLE_ADMIN">Administrador</SelectItem>
+                  <SelectItem value="ROLE_ANALISTA">Analista</SelectItem>
+                  <SelectItem value="ROLE_CLIENTE">Cliente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -256,43 +299,37 @@ export default function UserManagement() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((user) => (
-                  <TableRow key={user.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-                          <UserCircle className="h-4 w-4 text-primary" />
+                filtered.map((user) => {
+                  const roleInfo = getRoleInfo(user)
+                  return (
+                    <TableRow key={user.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+                            <UserCircle className="h-4 w-4 text-primary" />
+                          </div>
+                          <span className="font-medium">{user.nombre}</span>
                         </div>
-                        <span className="font-medium">{user.nombre}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{user.email}</TableCell>
-                    <TableCell>
-                      {/* MODIFICACIÓN 5: Adaptada la visualización del Badge para soportar ROLE_ANALISTA */}
-                      <Badge
-                        variant={
-                          user.rol?.nombre === 'ROLE_ADMIN' || user.rol === 'ROLE_ADMIN'
-                            ? 'default'
-                            : user.rol?.nombre === 'ROLE_ANALISTA' || user.rol === 'ROLE_ANALISTA'
-                            ? 'outline' // Estilo alternativo para Analista
-                            : 'secondary'
-                        }
-                      >
-                        {user.rol?.nombre || user.rol}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => openEdit(user)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openDelete(user)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                      <TableCell>
+                        <Badge variant={roleInfo.badgeVariant}>
+                          {roleInfo.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(user)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => openDelete(user)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               )}
             </TableBody>
           </Table>
